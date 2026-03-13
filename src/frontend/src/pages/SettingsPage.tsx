@@ -22,21 +22,16 @@ import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import {
   type CommissionType,
+  PLATFORMS,
   type Platform,
   useStore,
 } from "../store/useStore";
 
-const PLATFORMS: Platform[] = [
-  "Uber",
-  "InDrive",
-  "YatriSathi",
-  "Rapido",
-  "Ola",
-  "Porter",
-  "Other",
-];
+interface SettingsPageProps {
+  onAvatarClick?: () => void;
+}
 
-export default function SettingsPage() {
+export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
   const { settings, updateSettings } = useStore();
   const t = getTranslations(settings.language);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,7 +86,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
-      <Header title={t.settings.title} />
+      <Header title={t.settings.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4 space-y-4">
         {/* Driver Profile */}
         <div className="rounded-2xl bg-card border border-border p-4">
@@ -101,18 +96,25 @@ export default function SettingsPage() {
           <div className="flex items-center gap-4 mb-4">
             <div className="relative">
               <Avatar className="w-16 h-16">
-                <AvatarImage src={settings.profilePicture} />
-                <AvatarFallback className="text-xl">
-                  {driverName.slice(0, 2).toUpperCase()}
+                <AvatarImage src={settings.profilePicture || undefined} />
+                <AvatarFallback
+                  className="text-xl font-bold"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
+                    color: "white",
+                  }}
+                >
+                  {(driverName || "DR").slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <button
                 type="button"
-                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center"
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center shadow-md"
                 onClick={() => fileInputRef.current?.click()}
                 data-ocid="settings.upload_button"
               >
-                <Camera size={12} className="text-white" />
+                <Camera size={13} className="text-white" />
               </button>
               <input
                 ref={fileInputRef}
@@ -120,13 +122,22 @@ export default function SettingsPage() {
                 accept="image/*"
                 className="hidden"
                 onChange={handlePicture}
+                data-ocid="settings.photo.input"
               />
             </div>
             <div className="flex-1">
               <p className="font-semibold">{driverName || "Driver"}</p>
               <p className="text-sm text-muted-foreground">
-                {vehicleType} • {city || "City not set"}
+                {vehicleType} · {city || "City not set"}
               </p>
+              <button
+                type="button"
+                className="mt-1 text-xs font-medium underline"
+                style={{ color: "oklch(0.72 0.19 47)" }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Upload Photo
+              </button>
             </div>
           </div>
 
@@ -134,6 +145,7 @@ export default function SettingsPage() {
             <div>
               <Label>{t.settings.driverName}</Label>
               <Input
+                data-ocid="settings.drivername.input"
                 value={driverName}
                 onChange={(e) => setDriverName(e.target.value)}
                 className="mt-1"
@@ -148,7 +160,10 @@ export default function SettingsPage() {
                   setVehicleType(v as "Bike" | "Car" | "Auto" | "Other")
                 }
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger
+                  data-ocid="settings.vehicle.select"
+                  className="mt-1"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,6 +178,7 @@ export default function SettingsPage() {
             <div>
               <Label>{t.settings.city}</Label>
               <Input
+                data-ocid="settings.city.input"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 className="mt-1"
@@ -178,6 +194,7 @@ export default function SettingsPage() {
             {t.settings.dailyTarget}
           </Label>
           <Input
+            data-ocid="settings.dailytarget.input"
             type="number"
             value={dailyTarget}
             onChange={(e) => setDailyTarget(e.target.value)}
@@ -256,6 +273,7 @@ export default function SettingsPage() {
             {t.settings.fuelPrice}
           </Label>
           <Input
+            data-ocid="settings.fuelprice.input"
             type="number"
             value={fuelPrice}
             onChange={(e) => setFuelPrice(e.target.value)}
@@ -272,8 +290,8 @@ export default function SettingsPage() {
             {(
               [
                 ["en", "English"],
-                ["bn", "\u09ac\u09be\u0982\u09b2\u09be"],
-                ["hi", "\u0939\u093f\u0928\u094d\u09a6\u09c0"],
+                ["bn", "বাংলা"],
+                ["hi", "हिन्दी"],
               ] as const
             ).map(([code, label]) => (
               <button
@@ -306,8 +324,8 @@ export default function SettingsPage() {
           <div className="flex gap-2" data-ocid="settings.currency.toggle">
             {(
               [
-                ["INR", "\u20b9 INR"],
-                ["BDT", "\u09f3 BDT"],
+                ["INR", "₹ INR"],
+                ["BDT", "৳ BDT"],
                 ["USD", "$ USD"],
               ] as const
             ).map(([code, label]) => (

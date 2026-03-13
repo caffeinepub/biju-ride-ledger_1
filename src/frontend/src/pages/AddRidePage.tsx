@@ -7,26 +7,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
-import { type Platform, useStore } from "../store/useStore";
+import {
+  PLATFORMS,
+  type Platform,
+  getISTDatetimeLocal,
+  useStore,
+} from "../store/useStore";
 
 // Speech Recognition type declarations
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
 }
-
 interface SpeechRecognitionResultList {
   [index: number]: SpeechRecognitionResult;
 }
-
 interface SpeechRecognitionResult {
   [index: number]: SpeechRecognitionAlternative;
 }
-
 interface SpeechRecognitionAlternative {
   transcript: string;
   confidence: number;
 }
-
 interface SpeechRecognition extends EventTarget {
   lang: string;
   interimResults: boolean;
@@ -36,18 +37,7 @@ interface SpeechRecognition extends EventTarget {
   onerror: ((event: Event) => void) | null;
   onend: (() => void) | null;
 }
-
 declare const SpeechRecognition: { new (): SpeechRecognition };
-
-const PLATFORMS: Platform[] = [
-  "Uber",
-  "InDrive",
-  "YatriSathi",
-  "Rapido",
-  "Ola",
-  "Porter",
-  "Other",
-];
 
 const PLATFORM_COLORS: Record<Platform, string> = {
   Uber: "#000000",
@@ -73,9 +63,14 @@ interface AddRidePageProps {
     netIncome: number;
   } | null;
   onSaved?: () => void;
+  onAvatarClick?: () => void;
 }
 
-export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
+export default function AddRidePage({
+  editRide,
+  onSaved,
+  onAvatarClick,
+}: AddRidePageProps) {
   const { addRide, updateRide, settings, getAreaSuggestions, formatAmount } =
     useStore();
   const t = getTranslations(settings.language);
@@ -94,9 +89,7 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
   const [pickupArea, setPickupArea] = useState(editRide?.pickupArea || "");
   const [dropArea, setDropArea] = useState(editRide?.dropArea || "");
   const [date, setDate] = useState(
-    editRide
-      ? editRide.datetime.slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
+    editRide ? editRide.datetime.slice(0, 16) : getISTDatetimeLocal(),
   );
   const [pickupSuggestions, setPickupSuggestions] = useState<string[]>([]);
   const [dropSuggestions, setDropSuggestions] = useState<string[]>([]);
@@ -166,7 +159,7 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
       setDistance("");
       setPickupArea("");
       setDropArea("");
-      setDate(new Date().toISOString().slice(0, 16));
+      setDate(getISTDatetimeLocal());
     }
     onSaved?.();
   };
@@ -196,7 +189,6 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
     recognition.start();
     recognition.onresult = (e: SpeechRecognitionEvent) => {
       const text = e.results[0][0].transcript.toLowerCase();
-      // Parse: "uber 120 tip 20 distance 5"
       const platformMatch = PLATFORMS.find((p) =>
         text.includes(p.toLowerCase()),
       );
@@ -226,62 +218,61 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
-      <Header title={t.addRide.title} />
+      <Header title={t.addRide.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4">
-        {/* Platform selector - dropdown */}
-        <div className="mb-4" data-ocid="addride.platform.select">
-          <Label className="text-sm font-semibold mb-2 block">
-            {t.addRide.platform}
-          </Label>
-          <div className="relative">
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as Platform)}
-              className="w-full h-12 rounded-xl px-4 pr-10 text-base font-semibold appearance-none cursor-pointer focus:outline-none focus:ring-2"
-              style={{
-                background: "oklch(0.17 0.05 264)",
-                border: `2px solid ${PLATFORM_COLORS[platform]}`,
-                color:
-                  PLATFORM_COLORS[platform] === "#000000"
-                    ? "white"
-                    : PLATFORM_COLORS[platform],
-                boxShadow: `0 0 8px ${PLATFORM_COLORS[platform]}40`,
-              }}
-            >
-              {PLATFORMS.map((p, idx) => (
-                <option
+        {/* Voice Button */}
+        <div className="flex justify-end mb-3">
+          <Button
+            data-ocid="addride.voice.button"
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2 rounded-xl"
+            onClick={listening ? stopVoice : startVoice}
+            style={{
+              borderColor: listening
+                ? "oklch(0.62 0.22 27)"
+                : "oklch(var(--border))",
+              color: listening ? "oklch(0.62 0.22 27)" : undefined,
+            }}
+          >
+            {listening ? <MicOff size={15} /> : <Mic size={15} />}
+            {listening ? "Stop" : "Voice"}
+          </Button>
+        </div>
+
+        {/* Platform selector */}
+        <div className="mb-4">
+          <Label className="text-xs mb-2 block">{t.addRide.platform}</Label>
+          <div className="grid grid-cols-4 gap-2">
+            {PLATFORMS.map((p, idx) => {
+              const isSelected = platform === p;
+              return (
+                <button
                   key={p}
-                  value={p}
+                  type="button"
+                  data-ocid="addride.platform.toggle"
+                  onClick={() => setPlatform(p)}
+                  className="relative rounded-xl py-2.5 text-xs font-bold transition-all active:scale-95"
                   style={{
-                    background: "oklch(0.17 0.05 264)",
-                    color: "white",
+                    background: isSelected
+                      ? PLATFORM_COLORS[p]
+                      : "oklch(var(--muted))",
+                    color: isSelected
+                      ? "white"
+                      : "oklch(var(--muted-foreground))",
+                    boxShadow: isSelected
+                      ? `0 2px 8px ${PLATFORM_COLORS[p]}55`
+                      : undefined,
                   }}
                 >
-                  {idx + 1}. {p}
-                </option>
-              ))}
-            </select>
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
-              style={{ color: PLATFORM_COLORS[platform] }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M4 6l4 4 4-4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
+                  <span className="opacity-50 text-[9px] absolute top-1 left-1.5">
+                    {idx + 1}
+                  </span>
+                  {p}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -423,7 +414,7 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
           <div>
             <Label className="text-xs">{t.addRide.date}</Label>
             <Input
-              data-ocid="addride.date.input"
+              data-ocid="addride.datetime.input"
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -432,36 +423,19 @@ export default function AddRidePage({ editRide, onSaved }: AddRidePageProps) {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 mt-6">
-          <Button
-            data-ocid="addride.voice.button"
-            variant="outline"
-            className="h-14 rounded-xl px-4 gap-2"
-            onClick={listening ? stopVoice : startVoice}
-            style={{
-              borderColor: listening ? "oklch(0.62 0.22 27)" : undefined,
-              color: listening ? "oklch(0.62 0.22 27)" : undefined,
-            }}
-          >
-            {listening ? <MicOff size={20} /> : <Mic size={20} />}
-            <span className="text-sm">
-              {listening ? t.addRide.listening : t.addRide.voice}
-            </span>
-          </Button>
-          <Button
-            data-ocid="addride.save.button"
-            className="flex-1 h-14 rounded-xl text-base font-bold gap-2 text-white"
-            style={{
-              background:
-                "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
-            }}
-            onClick={handleSave}
-          >
-            <Save size={20} />
-            {t.addRide.saveRide}
-          </Button>
-        </div>
+        <Button
+          data-ocid="addride.save.button"
+          className="w-full h-14 rounded-xl text-base font-bold gap-2 text-white mt-6 active:scale-[0.98] transition-transform"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
+            boxShadow: "0 4px 20px -4px oklch(0.65 0.20 264 / 0.5)",
+          }}
+          onClick={handleSave}
+        >
+          <Save size={20} />
+          {editRide ? "Update Ride" : t.addRide.saveRide}
+        </Button>
       </main>
     </div>
   );

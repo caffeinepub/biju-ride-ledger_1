@@ -14,7 +14,13 @@ import { useMemo, useState } from "react";
 import Header from "../components/Header";
 import RideDetailSheet from "../components/RideDetailSheet";
 import { getTranslations } from "../i18n";
-import { type Platform, type Ride, useStore } from "../store/useStore";
+import {
+  PLATFORMS,
+  type Platform,
+  type Ride,
+  formatISTDate,
+  useStore,
+} from "../store/useStore";
 
 export const PLATFORM_COLORS: Record<Platform, string> = {
   Uber: "#000000",
@@ -28,10 +34,14 @@ export const PLATFORM_COLORS: Record<Platform, string> = {
 
 interface HistoryPageProps {
   onEditRide?: (ride: Ride) => void;
+  onAvatarClick?: () => void;
 }
 
-export default function HistoryPage({ onEditRide }: HistoryPageProps) {
-  const { rides, settings, formatAmount } = useStore();
+export default function HistoryPage({
+  onEditRide,
+  onAvatarClick,
+}: HistoryPageProps) {
+  const { rides, odometerSessions, settings, formatAmount } = useStore();
   const t = getTranslations(settings.language);
 
   const [search, setSearch] = useState("");
@@ -92,7 +102,7 @@ export default function HistoryPage({ onEditRide }: HistoryPageProps) {
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
-      <Header title={t.history.title} />
+      <Header title={t.history.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4 space-y-3">
         {/* Search */}
         <div className="flex gap-2">
@@ -110,6 +120,7 @@ export default function HistoryPage({ onEditRide }: HistoryPageProps) {
             />
           </div>
           <Button
+            data-ocid="history.filter.button"
             variant="outline"
             className="h-11 px-3 rounded-xl gap-1.5"
             onClick={() => setShowFilters((v) => !v)}
@@ -146,17 +157,7 @@ export default function HistoryPage({ onEditRide }: HistoryPageProps) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Platforms</SelectItem>
-                      {(
-                        [
-                          "Uber",
-                          "InDrive",
-                          "YatriSathi",
-                          "Rapido",
-                          "Ola",
-                          "Porter",
-                          "Other",
-                        ] as Platform[]
-                      ).map((p) => (
+                      {PLATFORMS.map((p) => (
                         <SelectItem key={p} value={p}>
                           {p}
                         </SelectItem>
@@ -230,81 +231,120 @@ export default function HistoryPage({ onEditRide }: HistoryPageProps) {
             <p className="text-muted-foreground">{t.history.noRides}</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {grouped.map(([date, dayRides]) => (
-              <div key={date}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">
-                  {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </p>
-                <div className="space-y-2">
-                  {dayRides.map((ride, idx) => {
-                    const globalIdx = filtered.indexOf(ride) + 1;
-                    const color = PLATFORM_COLORS[ride.platform];
-                    return (
-                      <motion.div
-                        key={ride.id}
-                        data-ocid={`history.ride.item.${globalIdx}`}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        onClick={() => setSelectedRide(ride)}
-                        className="rounded-2xl border border-border bg-card p-3.5 cursor-pointer active:scale-[0.98] transition-transform shadow-xs"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="px-2 py-0.5 rounded-full text-white text-xs font-bold"
-                              style={{ background: color }}
-                            >
-                              {ride.platform}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(ride.datetime).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <p
-                              className="text-sm font-bold"
-                              style={{ color: "oklch(0.65 0.15 142)" }}
-                            >
-                              {formatAmount(ride.netIncome)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Fare: {formatAmount(ride.fare)}
-                            </p>
-                          </div>
-                        </div>
-                        {(ride.pickupArea || ride.dropArea) && (
-                          <p className="text-xs text-muted-foreground mt-2 truncate">
-                            {ride.pickupArea} → {ride.dropArea}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <Badge
-                            variant="outline"
-                            className="text-xs px-1.5 py-0"
-                          >
-                            {ride.distance} km
-                          </Badge>
-                          {ride.commission > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              Comm: {formatAmount(ride.commission)}
+          <div className="space-y-5">
+            {grouped.map(([date, dayRides], groupIdx) => {
+              const dayIncome = dayRides.reduce((s, r) => s + r.netIncome, 0);
+              const dayDist = dayRides.reduce((s, r) => s + r.distance, 0);
+              // Look up odometer session for this date to compute blank KM
+              const odoSession = odometerSessions.find((s) => s.date === date);
+              const dayRunKm = odoSession
+                ? Math.max(0, odoSession.endKm - odoSession.startKm)
+                : 0;
+              const dayBlankKm =
+                dayRunKm > 0 ? Math.max(0, dayRunKm - dayDist) : null;
+
+              return (
+                <div key={date}>
+                  {/* Date group header */}
+                  <div
+                    className="px-3 py-2 rounded-xl mb-2"
+                    style={{ background: "oklch(0.58 0.21 264 / 0.10)" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p
+                          className="text-xs font-bold"
+                          style={{ color: "oklch(0.72 0.18 264)" }}
+                        >
+                          {formatISTDate(date)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {dayRides.length} ride
+                          {dayRides.length !== 1 ? "s" : ""} ·{" "}
+                          {dayDist.toFixed(1)} km run
+                          {dayBlankKm !== null && (
+                            <span style={{ color: "oklch(0.62 0.22 27)" }}>
+                              {" "}
+                              · {dayBlankKm.toFixed(1)} km blank
                             </span>
                           )}
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+                        </p>
+                      </div>
+                      <p
+                        className="text-sm font-bold"
+                        style={{ color: "oklch(0.65 0.15 142)" }}
+                      >
+                        {formatAmount(dayIncome)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {dayRides.map((ride, idx) => {
+                      const itemIdx = groupIdx * 100 + idx + 1;
+                      const color = PLATFORM_COLORS[ride.platform];
+                      return (
+                        <motion.div
+                          key={ride.id}
+                          data-ocid={`history.ride.item.${itemIdx}`}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.04 }}
+                          onClick={() => setSelectedRide(ride)}
+                          className="rounded-2xl border border-border bg-card p-3.5 cursor-pointer active:scale-[0.98] transition-transform shadow-xs"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="px-2 py-0.5 rounded-full text-white text-xs font-bold"
+                                style={{ background: color }}
+                              >
+                                {ride.platform}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(ride.datetime).toLocaleTimeString(
+                                  [],
+                                  { hour: "2-digit", minute: "2-digit" },
+                                )}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <p
+                                className="text-sm font-bold"
+                                style={{ color: "oklch(0.65 0.15 142)" }}
+                              >
+                                {formatAmount(ride.netIncome)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Fare: {formatAmount(ride.fare)}
+                              </p>
+                            </div>
+                          </div>
+                          {(ride.pickupArea || ride.dropArea) && (
+                            <p className="text-xs text-muted-foreground mt-2 truncate">
+                              {ride.pickupArea} → {ride.dropArea}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Badge
+                              variant="outline"
+                              className="text-xs px-1.5 py-0"
+                            >
+                              {ride.distance} km
+                            </Badge>
+                            {ride.commission > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Comm: {formatAmount(ride.commission)}
+                              </span>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

@@ -1,8 +1,20 @@
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useStore } from "../store/useStore";
+
 interface HeaderProps {
   title?: string;
+  onAvatarClick?: () => void;
 }
 
-export default function Header({ title }: HeaderProps) {
+export default function Header({ title, onAvatarClick }: HeaderProps) {
+  const { settings } = useStore();
+  const initials = (settings.driverName || "DR")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <header
       className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 safe-top"
@@ -40,6 +52,29 @@ export default function Header({ title }: HeaderProps) {
           </p>
         )}
       </div>
+
+      {/* Driver Avatar */}
+      <button
+        type="button"
+        data-ocid="header.avatar.button"
+        onClick={onAvatarClick}
+        className="flex-shrink-0 rounded-full ring-2 ring-white/20 hover:ring-white/40 transition-all active:scale-95"
+        aria-label="Open Settings"
+      >
+        <Avatar className="w-9 h-9">
+          <AvatarImage src={settings.profilePicture || undefined} />
+          <AvatarFallback
+            className="text-sm font-bold"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
+              color: "white",
+            }}
+          >
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+      </button>
     </header>
   );
 }

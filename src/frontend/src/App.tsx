@@ -23,7 +23,6 @@ function AppInner() {
   const [editingRide, setEditingRide] = useState<Ride | null>(null);
 
   useEffect(() => {
-    // System dark/light mode detection
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const update = (e: MediaQueryList | MediaQueryListEvent) => {
       document.documentElement.classList.toggle("dark", e.matches);
@@ -48,22 +47,29 @@ function AppInner() {
     setActiveTab("history");
   };
 
+  const goToSettings = () => setActiveTab("settings");
+
   if (showSplash) {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
   return (
     <div className="relative min-h-screen max-w-md mx-auto">
-      {activeTab === "home" && <HomePage />}
+      {activeTab === "home" && <HomePage onAvatarClick={goToSettings} />}
       {activeTab === "addRide" && (
         <AddRidePage
           editRide={editingRide}
           onSaved={editingRide ? handleRideSaved : undefined}
+          onAvatarClick={goToSettings}
         />
       )}
-      {activeTab === "history" && <HistoryPage onEditRide={handleEditRide} />}
-      {activeTab === "reports" && <ReportsPage />}
-      {activeTab === "settings" && <SettingsPage />}
+      {activeTab === "history" && (
+        <HistoryPage onEditRide={handleEditRide} onAvatarClick={goToSettings} />
+      )}
+      {activeTab === "reports" && <ReportsPage onAvatarClick={goToSettings} />}
+      {activeTab === "settings" && (
+        <SettingsPage onAvatarClick={goToSettings} />
+      )}
       <BottomNav
         active={activeTab}
         onTabChange={(tab) => {

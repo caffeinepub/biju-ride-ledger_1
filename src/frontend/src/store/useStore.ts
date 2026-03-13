@@ -18,6 +18,16 @@ export type Platform =
   | "Other";
 export type CommissionType = "percentage" | "fixed" | "daily_fee" | "none";
 
+export const PLATFORMS: Platform[] = [
+  "Uber",
+  "InDrive",
+  "YatriSathi",
+  "Rapido",
+  "Ola",
+  "Porter",
+  "Other",
+];
+
 export interface Ride {
   id: string;
   platform: Platform;
@@ -39,6 +49,17 @@ export interface FuelEntry {
   cost: number;
 }
 
+// Enhanced odometer session with datetime support
+export interface OdometerSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startKm: number;
+  endKm: number;
+  startTime?: string; // HH:MM
+  endTime?: string; // HH:MM
+}
+
+/** @deprecated use OdometerSession */
 export interface DailyOdometer {
   date: string;
   startKm: number;
@@ -96,9 +117,26 @@ function saveToStorage<T>(key: string, value: T) {
   } catch {}
 }
 
+/** Migrate old DailyOdometer[] to OdometerSession[] */
+function migrateOdometers(raw: unknown[]): OdometerSession[] {
+  return raw.map((item) => {
+    const d = item as Record<string, unknown>;
+    return {
+      id: (d.id as string) || crypto.randomUUID(),
+      date: (d.date as string) || "",
+      startKm: (d.startKm as number) || 0,
+      endKm: (d.endKm as number) || 0,
+      startTime: (d.startTime as string) || undefined,
+      endTime: (d.endTime as string) || undefined,
+    };
+  });
+}
+
 interface StoreContextType {
   rides: Ride[];
   fuelEntries: FuelEntry[];
+  odometerSessions: OdometerSession[];
+  /** @deprecated use odometerSessions */
   dailyOdometers: DailyOdometer[];
   settings: Settings;
   addRide: (ride: Omit<Ride, "id">) => void;
@@ -106,13 +144,25 @@ interface StoreContextType {
   deleteRide: (id: string) => void;
   addFuelEntry: (entry: Omit<FuelEntry, "id">) => void;
   deleteFuelEntry: (id: string) => void;
-  setDailyOdometer: (date: string, startKm: number, endKm: number) => void;
+  setDailyOdometer: (
+    date: string,
+    startKm: number,
+    endKm: number,
+    startTime?: string,
+    endTime?: string,
+  ) => void;
+  addOdometerSession: (session: Omit<OdometerSession, "id">) => void;
+  updateOdometerSession: (
+    id: string,
+    session: Partial<Omit<OdometerSession, "id">>,
+  ) => void;
+  deleteOdometerSession: (id: string) => void;
   updateSettings: (s: Partial<Settings>) => void;
   getCurrencySymbol: () => string;
   formatAmount: (amount: number) => string;
   getTodayRides: () => Ride[];
   getTodayFuelCost: () => number;
-  getTodayOdometer: () => DailyOdometer | undefined;
+  getTodayOdometer: () => OdometerSession | undefined;
   getAreaSuggestions: (partial: string) => string[];
 }
 
@@ -125,8 +175,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [fuelEntries, setFuelEntries] = useState<FuelEntry[]>(() =>
     loadFromStorage("biju_fuel", []),
   );
-  const [dailyOdometers, setDailyOdometers] = useState<DailyOdometer[]>(() =>
-    loadFromStorage("biju_odometers", []),
+  const [odometerSessions, setOdometerSessions] = useState<OdometerSession[]>(
+    () => {
+      const raw = loadFromStorage<unknown[]>("biju_odometers", []);
+      return migrateOdometers(raw);
+    },
   );
   const [settings, setSettings] = useState<Settings>(() => {
     const saved = loadFromStorage<Partial<Settings>>("biju_settings", {});
@@ -147,8 +200,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveToStorage("biju_fuel", fuelEntries);
   }, [fuelEntries]);
   useEffect(() => {
-    saveToStorage("biju_odometers", dailyOdometers);
-  }, [dailyOdometers]);
+    saveToStorage("biju_odometers", odometerSessions);
+  }, [odometerSessions]);
   useEffect(() => {
     saveToStorage("biju_settings", settings);
   }, [settings]);
@@ -178,18 +231,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setDailyOdometer = useCallback(
-    (date: string, startKm: number, endKm: number) => {
-      setDailyOdometers((prev) => {
+    (
+      date: string,
+      startKm: number,
+      endKm: number,
+      startTime?: string,
+      endTime?: string,
+    ) => {
+      setOdometerSessions((prev) => {
         const existing = prev.find((d) => d.date === date);
         if (existing)
           return prev.map((d) =>
-            d.date === date ? { date, startKm, endKm } : d,
+            d.date === date
+              ? {
+                  ...d,
+                  date,
+                  startKm,
+                  endKm,
+                  startTime: startTime ?? d.startTime,
+                  endTime: endTime ?? d.endTime,
+                }
+              : d,
           );
-        return [...prev, { date, startKm, endKm }];
+        return [
+          ...prev,
+          { id: crypto.randomUUID(), date, startKm, endKm, startTime, endTime },
+        ];
       });
     },
     [],
   );
+
+  const addOdometerSession = useCallback(
+    (session: Omit<OdometerSession, "id">) => {
+      setOdometerSessions((prev) => [
+        ...prev,
+        { ...session, id: crypto.randomUUID() },
+      ]);
+    },
+    [],
+  );
+
+  const updateOdometerSession = useCallback(
+    (id: string, session: Partial<Omit<OdometerSession, "id">>) => {
+      setOdometerSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...session } : s)),
+      );
+    },
+    [],
+  );
+
+  const deleteOdometerSession = useCallback((id: string) => {
+    setOdometerSessions((prev) => prev.filter((s) => s.id !== id));
+  }, []);
 
   const updateSettings = useCallback((s: Partial<Settings>) => {
     setSettings((prev) => ({
@@ -216,20 +310,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const getTodayRides = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getISTDateString();
     return rides.filter((r) => r.datetime.startsWith(today));
   }, [rides]);
 
   const getTodayFuelCost = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getISTDateString();
     const todayFuel = fuelEntries.filter((f) => f.date.startsWith(today));
     return todayFuel.reduce((sum, f) => sum + f.cost, 0);
   }, [fuelEntries]);
 
   const getTodayOdometer = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return dailyOdometers.find((d) => d.date === today);
-  }, [dailyOdometers]);
+    const today = getISTDateString();
+    return odometerSessions.find((d) => d.date === today);
+  }, [odometerSessions]);
 
   const getAreaSuggestions = useCallback(
     (partial: string) => {
@@ -247,9 +341,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [rides],
   );
 
+  // Backward-compat dailyOdometers view
+  const dailyOdometers: DailyOdometer[] = odometerSessions.map((s) => ({
+    date: s.date,
+    startKm: s.startKm,
+    endKm: s.endKm,
+  }));
+
   const value: StoreContextType = {
     rides,
     fuelEntries,
+    odometerSessions,
     dailyOdometers,
     settings,
     addRide,
@@ -258,6 +360,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addFuelEntry,
     deleteFuelEntry,
     setDailyOdometer,
+    addOdometerSession,
+    updateOdometerSession,
+    deleteOdometerSession,
     updateSettings,
     getCurrencySymbol,
     formatAmount,
@@ -274,4 +379,38 @@ export function useStore(): StoreContextType {
   const ctx = useContext(StoreContext);
   if (!ctx) throw new Error("useStore must be used within StoreProvider");
   return ctx;
+}
+
+/** Get current date string in IST (YYYY-MM-DD) */
+export function getISTDateString(d?: Date): string {
+  const date = d || new Date();
+  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
+
+/** Get current datetime string in IST for input[type=datetime-local] */
+export function getISTDatetimeLocal(d?: Date): string {
+  const date = d || new Date();
+  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 16);
+}
+
+/** Format IST date for display: "11 Mar 2026" */
+export function formatISTDate(dateStr: string): string {
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const [year, month, day] = dateStr.split("-");
+  return `${Number.parseInt(day)} ${months[Number.parseInt(month) - 1]} ${year}`;
 }

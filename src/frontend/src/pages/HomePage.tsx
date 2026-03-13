@@ -3,33 +3,50 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Fuel, Target, TrendingUp, Zap } from "lucide-react";
 import { motion } from "motion/react";
-import { useMemo, useState } from "react";
-import FuelEntryModal from "../components/FuelEntryModal";
+import { useEffect, useMemo, useState } from "react";
+import FuelHistoryModal from "../components/FuelHistoryModal";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import { getSmartRecommendations } from "../store/analytics";
-import { useStore } from "../store/useStore";
+import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
 
-export default function HomePage() {
+interface HomePageProps {
+  onAvatarClick?: () => void;
+}
+
+export default function HomePage({ onAvatarClick }: HomePageProps) {
   const {
     rides,
+    fuelEntries,
+    odometerSessions,
     settings,
     getTodayRides,
     getTodayFuelCost,
-    getTodayOdometer,
     setDailyOdometer,
     formatAmount,
   } = useStore();
   const t = getTranslations(settings.language);
   const [fuelModalOpen, setFuelModalOpen] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTDateString();
+
+  // ─── Odometer date selector (supports backdating) ───
+  const [odoDate, setOdoDate] = useState(today);
+  const selectedSession = odometerSessions.find((s) => s.date === odoDate);
+  const [startKm, setStartKm] = useState(
+    String(selectedSession?.startKm || ""),
+  );
+  const [endKm, setEndKm] = useState(String(selectedSession?.endKm || ""));
+
+  // When odoDate changes, load that day's session values
+  useEffect(() => {
+    const session = odometerSessions.find((s) => s.date === odoDate);
+    setStartKm(String(session?.startKm || ""));
+    setEndKm(String(session?.endKm || ""));
+  }, [odoDate, odometerSessions]);
+
   const todayRides = getTodayRides();
   const todayFuelCost = getTodayFuelCost();
-  const todayOdo = getTodayOdometer();
-
-  const [startKm, setStartKm] = useState(String(todayOdo?.startKm || ""));
-  const [endKm, setEndKm] = useState(String(todayOdo?.endKm || ""));
 
   const totalIncome = useMemo(
     () => todayRides.reduce((s, r) => s + r.netIncome, 0),
@@ -41,10 +58,32 @@ export default function HomePage() {
   );
   const netProfit = totalIncome - todayFuelCost;
 
+  // ─── All-time cumulative totals ───
+  const allTimeIncome = useMemo(
+    () => rides.reduce((s, r) => s + r.netIncome, 0),
+    [rides],
+  );
+  const allTimeFuel = useMemo(
+    () => fuelEntries.reduce((s, f) => s + f.cost, 0),
+    [fuelEntries],
+  );
+  const allTimeRides = rides.length;
+  const allTimeDist = useMemo(
+    () => rides.reduce((s, r) => s + r.distance, 0),
+    [rides],
+  );
+
   const startKmNum = Number.parseFloat(startKm) || 0;
   const endKmNum = Number.parseFloat(endKm) || 0;
   const dayDistance = endKmNum > startKmNum ? endKmNum - startKmNum : 0;
-  const blankKm = Math.max(0, dayDistance - totalRideDistance);
+
+  // Blank km for selected odo date
+  const selectedDateRideKm = useMemo(() => {
+    return rides
+      .filter((r) => r.datetime.startsWith(odoDate))
+      .reduce((s, r) => s + r.distance, 0);
+  }, [rides, odoDate]);
+  const blankKm = Math.max(0, dayDistance - selectedDateRideKm);
 
   const progressPct =
     settings.dailyTarget > 0
@@ -59,7 +98,9 @@ export default function HomePage() {
 
   const handleOdometerSave = () => {
     if (startKmNum > 0) {
-      setDailyOdometer(today, startKmNum, endKmNum);
+      const now = new Date();
+      const timeStr = now.toTimeString().slice(0, 5);
+      setDailyOdometer(odoDate, startKmNum, endKmNum, timeStr);
     }
   };
 
@@ -69,13 +110,41 @@ export default function HomePage() {
     transition: { duration: 0.38, delay, ease: "easeOut" as const },
   });
 
+  const periodLabel = `Today — ${formatISTDate(today)}`;
+
   return (
     <div className="flex flex-col min-h-screen pb-20">
-      <Header title={t.home.title} />
+      <Header title={t.home.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 pt-4 pb-6 space-y-3">
-        {/* ─── HERO: Net Profit Card ─── */}
+        {/* ─── Period Label ─── */}
         <motion.div
           {...fadeUp(0)}
+          className="flex items-center justify-between"
+        >
+          <p
+            className="text-sm font-semibold"
+            style={{ color: "oklch(0.65 0.10 264)" }}
+          >
+            {periodLabel}
+          </p>
+          <span
+            className="text-xs font-bold px-3 py-1 rounded-full text-white"
+            style={{
+              background: isGoodDay
+                ? "oklch(0.58 0.16 142)"
+                : "oklch(0.68 0.14 75)",
+              boxShadow: isGoodDay
+                ? "0 2px 8px oklch(0.58 0.16 142 / 0.4)"
+                : "0 2px 8px oklch(0.68 0.14 75 / 0.4)",
+            }}
+          >
+            {isGoodDay ? "Good Day 🎉" : "Keep Going 💪"}
+          </span>
+        </motion.div>
+
+        {/* ─── HERO: Net Profit Card ─── */}
+        <motion.div
+          {...fadeUp(0.04)}
           className="relative overflow-hidden rounded-2xl px-5 py-5"
           style={{
             background:
@@ -84,7 +153,6 @@ export default function HomePage() {
               "0 8px 32px -6px oklch(0.22 0.12 264 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.08)",
           }}
         >
-          {/* Decorative background ring */}
           <div
             className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-15"
             style={{
@@ -99,7 +167,6 @@ export default function HomePage() {
                 "radial-gradient(circle, oklch(0.68 0.20 264) 0%, transparent 70%)",
             }}
           />
-
           <div className="relative z-10">
             <p
               className="text-[11px] font-semibold uppercase tracking-widest mb-1"
@@ -110,8 +177,6 @@ export default function HomePage() {
             <p className="text-4xl font-bold font-display text-white leading-none mb-3">
               {formatAmount(netProfit)}
             </p>
-
-            {/* Stat pills row */}
             <div className="flex gap-2 flex-wrap">
               <StatPill
                 label={t.home.totalIncome}
@@ -132,9 +197,64 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* ─── Distance Card ─── */}
+        {/* ─── All-Time Totals ─── */}
         <motion.div
           {...fadeUp(0.06)}
+          className="rounded-2xl p-4 border"
+          style={{
+            background: "oklch(0.65 0.15 142 / 0.08)",
+            borderColor: "oklch(0.65 0.15 142 / 0.25)",
+          }}
+        >
+          <p
+            className="text-[11px] font-semibold uppercase tracking-widest mb-2"
+            style={{ color: "oklch(0.58 0.12 142)" }}
+          >
+            All Time Totals
+          </p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Rides</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.58 0.21 264)" }}
+              >
+                {allTimeRides}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Income</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.65 0.15 142)" }}
+              >
+                {formatAmount(allTimeIncome)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Fuel</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.62 0.22 27)" }}
+              >
+                {formatAmount(allTimeFuel)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Dist</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.72 0.18 264)" }}
+              >
+                {allTimeDist.toFixed(0)}km
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ─── Distance Card ─── */}
+        <motion.div
+          {...fadeUp(0.08)}
           className="rounded-2xl px-4 py-4 border"
           style={{
             background: "oklch(0.58 0.21 264 / 0.10)",
@@ -183,21 +303,7 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
-            <span
-              className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
-              style={{
-                background: isGoodDay
-                  ? "oklch(0.58 0.16 142)"
-                  : "oklch(0.68 0.14 75)",
-                boxShadow: isGoodDay
-                  ? "0 2px 8px oklch(0.58 0.16 142 / 0.4)"
-                  : "0 2px 8px oklch(0.68 0.14 75 / 0.4)",
-              }}
-            >
-              {isGoodDay ? t.home.goodDay : t.home.keepGoing}
-            </span>
           </div>
-
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">{t.home.progress}</span>
@@ -225,14 +331,34 @@ export default function HomePage() {
 
         {/* ─── Odometer Section ─── */}
         <motion.div
-          {...fadeUp(0.18)}
+          {...fadeUp(0.16)}
           className="rounded-2xl p-4 border bg-card"
           style={{ borderColor: "oklch(var(--border))" }}
         >
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp size={15} style={{ color: "oklch(0.72 0.19 47)" }} />
-            <h3 className="font-semibold text-sm font-display">Odometer</h3>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={15} style={{ color: "oklch(0.72 0.19 47)" }} />
+              <h3 className="font-semibold text-sm font-display">Odometer</h3>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              Tap away from field to save
+            </span>
           </div>
+
+          {/* Date selector for backdating */}
+          <div className="mb-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+              Date
+            </p>
+            <Input
+              data-ocid="home.ododate.input"
+              type="date"
+              value={odoDate}
+              onChange={(e) => setOdoDate(e.target.value)}
+              className="h-10"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
@@ -289,10 +415,16 @@ export default function HomePage() {
               </p>
             </div>
           </div>
+
+          {odoDate !== today && (
+            <p className="text-[10px] text-center text-muted-foreground mt-2">
+              Viewing: {formatISTDate(odoDate)}
+            </p>
+          )}
         </motion.div>
 
-        {/* ─── Add Fuel Button ─── */}
-        <motion.div {...fadeUp(0.22)}>
+        {/* ─── Add Fuel / View Fuel Log Button ─── */}
+        <motion.div {...fadeUp(0.2)}>
           <Button
             data-ocid="home.addfuel.button"
             className="w-full h-12 rounded-xl text-base font-semibold gap-2 text-white transition-all active:scale-[0.98]"
@@ -304,14 +436,14 @@ export default function HomePage() {
             onClick={() => setFuelModalOpen(true)}
           >
             <Fuel size={18} />
-            {t.home.addFuel}
+            Fuel Log
           </Button>
         </motion.div>
 
         {/* ─── Smart Insights ─── */}
         {recommendations.length > 0 && (
           <motion.div
-            {...fadeUp(0.26)}
+            {...fadeUp(0.24)}
             className="rounded-2xl p-4 border bg-card"
             style={{ borderColor: "oklch(var(--border))" }}
           >
@@ -343,7 +475,7 @@ export default function HomePage() {
           </motion.div>
         )}
       </main>
-      <FuelEntryModal
+      <FuelHistoryModal
         open={fuelModalOpen}
         onClose={() => setFuelModalOpen(false)}
       />
@@ -351,16 +483,11 @@ export default function HomePage() {
   );
 }
 
-// ─── Helper: stat pill inside hero card ───
 function StatPill({
   label,
   value,
   accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
+}: { label: string; value: string; accent: string }) {
   return (
     <div
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
