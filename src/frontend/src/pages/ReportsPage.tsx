@@ -19,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import * as XLSX from "xlsx";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import {
@@ -27,6 +28,7 @@ import {
   getPeakHours,
   getSmartRecommendations,
 } from "../store/analytics";
+import { calcBlankKm, calcRideKm, calcRunKm } from "../store/kmUtils";
 import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
 
 function calcPeriodData(
@@ -42,13 +44,61 @@ function calcPeriodData(
   const periodOdo = odometerSessions.filter((o) => new Date(o.date) >= cutoff);
   const income = periodRides.reduce((s, r) => s + r.netIncome, 0);
   const fuel = periodFuel.reduce((s, f) => s + f.cost, 0);
-  const rideDist = periodRides.reduce((s, r) => s + r.distance, 0);
+  const rideDist = calcRideKm(periodRides);
   const runKm = periodOdo.reduce(
-    (s, o) => s + Math.max(0, o.endKm - o.startKm),
+    (s, o) => s + calcRunKm(o.startKm, o.endKm),
     0,
   );
-  const blankKm = Math.max(0, runKm - rideDist);
+  const blankKm = calcBlankKm(runKm, rideDist);
   return { periodRides, periodFuel, income, fuel, rideDist, runKm, blankKm };
+}
+
+/** Build per-day summary rows for export */
+function buildExportRows(
+  rides: import("../store/useStore").Ride[],
+  fuelEntries: import("../store/useStore").FuelEntry[],
+  odometerSessions: import("../store/useStore").OdometerSession[],
+  days: number,
+): Array<(string | number)[]> {
+  const header = [
+    "Date",
+    "Rides",
+    "Income (₹)",
+    "Fuel (₹)",
+    "Run KM",
+    "Blank KM",
+    "Net Profit (₹)",
+  ];
+  const rows: Array<(string | number)[]> = [header];
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+
+    const dayRides = rides.filter((r) => r.datetime.startsWith(dateStr));
+    const dayFuel = fuelEntries
+      .filter((f) => f.date.startsWith(dateStr))
+      .reduce((s, f) => s + f.cost, 0);
+    const dayOdo = odometerSessions.find((o) => o.date === dateStr);
+    const dayIncome = dayRides.reduce((s, r) => s + r.netIncome, 0);
+    const dayRideKm = calcRideKm(dayRides);
+    const dayRunKm = dayOdo ? calcRunKm(dayOdo.startKm, dayOdo.endKm) : 0;
+    const dayBlankKm = calcBlankKm(dayRunKm, dayRideKm);
+    const netProfit = dayIncome - dayFuel;
+
+    rows.push([
+      dateStr,
+      dayRides.length,
+      Number(dayIncome.toFixed(2)),
+      Number(dayFuel.toFixed(2)),
+      Number(dayRunKm.toFixed(1)),
+      Number(dayBlankKm.toFixed(1)),
+      Number(netProfit.toFixed(2)),
+    ]);
+  }
+
+  return rows;
 }
 
 interface ReportsPageProps {
@@ -64,6 +114,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
 
   const today = getISTDateString();
   const [dailyDate, setDailyDate] = useState(today);
+  const [activeTab, setActiveTab] = useState("today");
 
   // ── Today summary ──
   const todayRides = useMemo(
@@ -78,12 +129,11 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
     [fuelEntries, today],
   );
   const todayOdo = odometerSessions.find((s) => s.date === today);
-  const todayRunKm = todayOdo
-    ? Math.max(0, todayOdo.endKm - todayOdo.startKm)
-    : 0;
-  const todayRideDist = todayRides.reduce((s, r) => s + r.distance, 0);
-  const todayBlankKm = Math.max(0, todayRunKm - todayRideDist);
+  const todayRunKm = todayOdo ? calcRunKm(todayOdo.startKm, todayOdo.endKm) : 0;
+  const todayRideDist = calcRideKm(todayRides);
+  const todayBlankKm = calcBlankKm(todayRunKm, todayRideDist);
   const todayIncome = todayRides.reduce((s, r) => s + r.netIncome, 0);
+
   // ── Period helpers ──
   const weekData = useMemo(
     () => calcPeriodData(rides, fuelEntries, odometerSessions, 7),
@@ -100,6 +150,10 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
   );
   const monthChartData = useMemo(
     () => getChartData(rides, fuelEntries, 30),
+    [rides, fuelEntries],
+  );
+  const todayChartData = useMemo(
+    () => getChartData(rides, fuelEntries, 7),
     [rides, fuelEntries],
   );
 
@@ -129,88 +183,43 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
     [monthData.periodRides],
   );
 
+  const todayGoldmine = useMemo(
+    () => getGoldmineAreas(todayRides),
+    [todayRides],
+  );
+  const todayPeakHours = useMemo(() => getPeakHours(todayRides), [todayRides]);
+  const todayRecs = useMemo(
+    () => getSmartRecommendations(todayRides),
+    [todayRides],
+  );
+
   const chartStroke = "oklch(0.58 0.21 264)";
   const chartOrange = "oklch(0.72 0.19 47)";
 
   // ── Export helpers ──
+  function getExportDays() {
+    if (activeTab === "week") return 7;
+    if (activeTab === "month") return 30;
+    if (activeTab === "daily") return 1;
+    return 1; // today
+  }
+
   function exportCSV() {
-    const rows = [
-      [
-        "Date",
-        "Time",
-        "Platform",
-        "Fare",
-        "Commission",
-        "Tips",
-        "Net Income",
-        "Distance",
-        "Pickup",
-        "Drop",
-      ].join(","),
-      ...rides.map((r) =>
-        [
-          r.datetime.slice(0, 10),
-          new Date(r.datetime).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          r.platform,
-          r.fare,
-          r.commission,
-          r.tips,
-          r.netIncome,
-          r.distance,
-          `"${r.pickupArea}"`,
-          `"${r.dropArea}"`,
-        ].join(","),
-      ),
-      "",
-      ["Fuel Date", "Odometer", "Litres", "Cost"].join(","),
-      ...fuelEntries.map((f) =>
-        [f.date, f.odometerKm, f.litres, f.cost].join(","),
-      ),
-    ];
-    download(rows.join("\n"), "biju-report.csv", "text/csv");
+    const days = getExportDays();
+    const rows = buildExportRows(rides, fuelEntries, odometerSessions, days);
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    download(csv, `biju-report-${dateStr}.csv`, "text/csv");
   }
 
   function exportXLS() {
-    const rows = [
-      [
-        "Date",
-        "Time",
-        "Platform",
-        "Fare",
-        "Commission",
-        "Tips",
-        "Net Income",
-        "Distance",
-        "Pickup",
-        "Drop",
-      ].join("\t"),
-      ...rides.map((r) =>
-        [
-          r.datetime.slice(0, 10),
-          new Date(r.datetime).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          r.platform,
-          r.fare,
-          r.commission,
-          r.tips,
-          r.netIncome,
-          r.distance,
-          r.pickupArea,
-          r.dropArea,
-        ].join("\t"),
-      ),
-      "\t",
-      ["Fuel Date", "Odometer (km)", "Litres", "Cost"].join("\t"),
-      ...fuelEntries.map((f) =>
-        [f.date, f.odometerKm, f.litres, f.cost].join("\t"),
-      ),
-    ];
-    download(rows.join("\n"), "biju-report.xls", "application/vnd.ms-excel");
+    const days = getExportDays();
+    const rows = buildExportRows(rides, fuelEntries, odometerSessions, days);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `biju-report-${dateStr}.xlsx`);
   }
 
   function exportPDF() {
@@ -428,11 +437,11 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                     >
                       {i + 1}
                     </span>
-                    <span className="text-sm font-medium">{area.area}</span>
+                    <span className="text-sm font-bold">{area.area}</span>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold">
-                      {formatAmount(area.avgIncome)}/ride
+                      Avg {formatAmount(area.avgIncome)}/ride
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {area.rideCount} rides
@@ -482,11 +491,17 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
             </h3>
           </div>
           <div className="space-y-2">
-            {recs.map((rec) => (
-              <p key={rec} className="text-sm">
-                {rec}
+            {recs.length > 0 ? (
+              recs.map((rec) => (
+                <p key={rec} className="text-sm">
+                  {rec}
+                </p>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Add more rides to get smart insights.
               </p>
-            ))}
+            )}
           </div>
         </div>
       </>
@@ -533,7 +548,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                 data-ocid="reports.export.xls"
                 onClick={exportXLS}
               >
-                📊 Excel (.xls)
+                📊 Excel (.xlsx)
               </DropdownMenuItem>
               <DropdownMenuItem
                 data-ocid="reports.export.pdf"
@@ -545,7 +560,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
           </DropdownMenu>
         </div>
 
-        <Tabs defaultValue="today">
+        <Tabs defaultValue="today" onValueChange={setActiveTab}>
           <TabsList className="w-full">
             <TabsTrigger
               data-ocid="reports.today.tab"
@@ -591,6 +606,12 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                 blankKm={todayBlankKm}
               />
             </div>
+            <Charts chartData={todayChartData} />
+            <AnalyticsSection
+              goldmineAreas={todayGoldmine}
+              peakHours={todayPeakHours}
+              recs={todayRecs}
+            />
           </TabsContent>
 
           {/* WEEKLY TAB */}
@@ -636,6 +657,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               recs={monthRecs}
             />
           </TabsContent>
+
           {/* DAILY TAB */}
           <TabsContent value="daily" className="space-y-4 mt-4">
             <div className="rounded-2xl bg-card border border-border p-4">
@@ -658,12 +680,9 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                 const dOdo = odometerSessions.find((o) => o.date === dailyDate);
                 const dIncome = dRides.reduce((s, r) => s + r.netIncome, 0);
                 const dFuelCost = dFuel.reduce((s, f) => s + f.cost, 0);
-                const dRunKm = dOdo
-                  ? Math.max(0, dOdo.endKm - dOdo.startKm)
-                  : 0;
-                const dRideDist = dRides.reduce((s, r) => s + r.distance, 0);
-                const dBlankKm =
-                  dRunKm > 0 ? Math.max(0, dRunKm - dRideDist) : 0;
+                const dRunKm = dOdo ? calcRunKm(dOdo.startKm, dOdo.endKm) : 0;
+                const dRideDist = calcRideKm(dRides);
+                const dBlankKm = calcBlankKm(dRunKm, dRideDist);
                 return (
                   <SummaryGrid
                     income={dIncome}
@@ -704,7 +723,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold">
-                        {Math.max(0, s.endKm - s.startKm).toFixed(1)} km
+                        {calcRunKm(s.startKm, s.endKm).toFixed(1)} km
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {s.startKm} → {s.endKm}

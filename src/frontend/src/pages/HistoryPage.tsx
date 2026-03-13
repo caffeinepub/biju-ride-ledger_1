@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import Header from "../components/Header";
 import RideDetailSheet from "../components/RideDetailSheet";
 import { getTranslations } from "../i18n";
+import { calcBlankKm, calcRideKm, calcRunKm } from "../store/kmUtils";
 import {
   PLATFORMS,
   type Platform,
@@ -234,48 +235,63 @@ export default function HistoryPage({
           <div className="space-y-5">
             {grouped.map(([date, dayRides], groupIdx) => {
               const dayIncome = dayRides.reduce((s, r) => s + r.netIncome, 0);
-              const dayDist = dayRides.reduce((s, r) => s + r.distance, 0);
-              // Look up odometer session for this date to compute blank KM
+              const rideKm = calcRideKm(dayRides);
+
+              // Look up odometer session for this date
               const odoSession = odometerSessions.find((s) => s.date === date);
-              const dayRunKm = odoSession
-                ? Math.max(0, odoSession.endKm - odoSession.startKm)
-                : 0;
-              const dayBlankKm =
-                dayRunKm > 0 ? Math.max(0, dayRunKm - dayDist) : null;
+              const runKm = odoSession
+                ? calcRunKm(odoSession.startKm, odoSession.endKm)
+                : null;
+              const blankKm =
+                runKm !== null ? calcBlankKm(runKm, rideKm) : null;
 
               return (
                 <div key={date}>
-                  {/* Date group header */}
+                  {/* Date group header — expanded with all 5 stats */}
                   <div
-                    className="px-3 py-2 rounded-xl mb-2"
+                    className="px-3 py-2.5 rounded-xl mb-2"
                     style={{ background: "oklch(0.58 0.21 264 / 0.10)" }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p
-                          className="text-xs font-bold"
-                          style={{ color: "oklch(0.72 0.18 264)" }}
-                        >
-                          {formatISTDate(date)}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {dayRides.length} ride
-                          {dayRides.length !== 1 ? "s" : ""} ·{" "}
-                          {dayDist.toFixed(1)} km run
-                          {dayBlankKm !== null && (
-                            <span style={{ color: "oklch(0.62 0.22 27)" }}>
-                              {" "}
-                              · {dayBlankKm.toFixed(1)} km blank
-                            </span>
-                          )}
-                        </p>
-                      </div>
+                    {/* Top row: date + total income */}
+                    <div className="flex items-center justify-between mb-2">
+                      <p
+                        className="text-xs font-bold"
+                        style={{ color: "oklch(0.72 0.18 264)" }}
+                      >
+                        {formatISTDate(date)}
+                      </p>
                       <p
                         className="text-sm font-bold"
                         style={{ color: "oklch(0.65 0.15 142)" }}
                       >
                         {formatAmount(dayIncome)}
                       </p>
+                    </div>
+
+                    {/* Stats pills grid */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <DayStat
+                        label="Rides"
+                        value={String(dayRides.length)}
+                        color="oklch(0.58 0.21 264)"
+                      />
+                      <DayStat
+                        label="Ride KM"
+                        value={`${rideKm.toFixed(1)} km`}
+                        color="oklch(0.65 0.15 142)"
+                      />
+                      <DayStat
+                        label="Run KM"
+                        value={runKm !== null ? `${runKm.toFixed(1)} km` : "—"}
+                        color="oklch(0.72 0.18 264)"
+                      />
+                      <DayStat
+                        label="Blank KM"
+                        value={
+                          blankKm !== null ? `${blankKm.toFixed(1)} km` : "—"
+                        }
+                        color="oklch(0.62 0.22 27)"
+                      />
                     </div>
                   </div>
 
@@ -355,6 +371,35 @@ export default function HistoryPage({
         onClose={() => setSelectedRide(null)}
         onEdit={(r) => onEditRide?.(r)}
       />
+    </div>
+  );
+}
+
+function DayStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
+      style={{
+        background: `${color} / 0.12`,
+        backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`,
+        color,
+      }}
+    >
+      <span
+        className="text-muted-foreground"
+        style={{ color: "inherit", opacity: 0.7 }}
+      >
+        {label}:
+      </span>
+      <span style={{ color }}>{value}</span>
     </div>
   );
 }

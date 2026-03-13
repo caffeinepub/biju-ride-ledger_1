@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Fuel, Target, TrendingUp, Zap } from "lucide-react";
+import { Fuel, Save, Target, TrendingUp, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import FuelHistoryModal from "../components/FuelHistoryModal";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import { getSmartRecommendations } from "../store/analytics";
+import { calcBlankKm, calcRideKm, calcRunKm } from "../store/kmUtils";
 import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
 
 interface HomePageProps {
@@ -75,15 +76,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
 
   const startKmNum = Number.parseFloat(startKm) || 0;
   const endKmNum = Number.parseFloat(endKm) || 0;
-  const dayDistance = endKmNum > startKmNum ? endKmNum - startKmNum : 0;
+  const dayDistance = calcRunKm(startKmNum, endKmNum);
 
-  // Blank km for selected odo date
+  // Blank km for selected odo date using consistent formula
   const selectedDateRideKm = useMemo(() => {
-    return rides
-      .filter((r) => r.datetime.startsWith(odoDate))
-      .reduce((s, r) => s + r.distance, 0);
+    return calcRideKm(rides.filter((r) => r.datetime.startsWith(odoDate)));
   }, [rides, odoDate]);
-  const blankKm = Math.max(0, dayDistance - selectedDateRideKm);
+  const blankKm = calcBlankKm(dayDistance, selectedDateRideKm);
 
   const progressPct =
     settings.dailyTarget > 0
@@ -101,6 +100,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
       const now = new Date();
       const timeStr = now.toTimeString().slice(0, 5);
       setDailyOdometer(odoDate, startKmNum, endKmNum, timeStr);
+      toast.success("Saved successfully");
+    } else {
+      toast.error("Please enter a Start KM value first");
     }
   };
 
@@ -340,9 +342,6 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               <TrendingUp size={15} style={{ color: "oklch(0.72 0.19 47)" }} />
               <h3 className="font-semibold text-sm font-display">Odometer</h3>
             </div>
-            <span className="text-[10px] text-muted-foreground">
-              Tap away from field to save
-            </span>
           </div>
 
           {/* Date selector for backdating */}
@@ -389,6 +388,22 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               />
             </div>
           </div>
+
+          {/* Save Odometer Button */}
+          <Button
+            data-ocid="home.save_odometer.button"
+            onClick={handleOdometerSave}
+            className="w-full h-11 rounded-xl font-semibold gap-2 text-white mb-3 transition-all active:scale-[0.98]"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.45 0.20 264) 0%, oklch(0.55 0.22 264) 100%)",
+              boxShadow: "0 4px 14px -3px oklch(0.55 0.22 264 / 0.45)",
+            }}
+          >
+            <Save size={16} />
+            Save Odometer
+          </Button>
+
           <div
             className="flex gap-0 rounded-xl overflow-hidden border"
             style={{ borderColor: "oklch(var(--border))" }}
