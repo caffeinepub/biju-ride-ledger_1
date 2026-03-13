@@ -1,0 +1,142 @@
+@font-face {
+  font-family: 'Outfit';
+  src: url('/assets/fonts/Outfit.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/assets/fonts/BricolageGrotesque.woff2') format('woff2');
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0.98 0.005 264;
+    --foreground: 0.15 0.03 264;
+    --card: 1.0 0 0;
+    --card-foreground: 0.15 0.03 264;
+    --popover: 1.0 0 0;
+    --popover-foreground: 0.15 0.03 264;
+    --primary: 0.52 0.21 264;
+    --primary-foreground: 0.98 0.005 264;
+    --secondary: 0.92 0.01 264;
+    --secondary-foreground: 0.15 0.03 264;
+    --muted: 0.93 0.01 264;
+    --muted-foreground: 0.50 0.05 264;
+    --accent: 0.70 0.19 47;
+    --accent-foreground: 0.98 0.005 264;
+    --destructive: 0.60 0.20 27;
+    --destructive-foreground: 0.98 0.005 264;
+    --success: 0.65 0.15 142;
+    --success-foreground: 0.98 0.005 264;
+    --warning: 0.75 0.15 75;
+    --warning-foreground: 0.15 0.03 264;
+    --border: 0.88 0.02 264;
+    --input: 0.88 0.02 264;
+    --ring: 0.52 0.21 264;
+    --radius: 1rem;
+    --chart-1: 0.52 0.21 264;
+    --chart-2: 0.70 0.19 47;
+    --chart-3: 0.65 0.15 142;
+    --chart-4: 0.60 0.20 27;
+    --chart-5: 0.75 0.15 75;
+    --sidebar: 0.95 0.01 264;
+    --sidebar-foreground: 0.15 0.03 264;
+    --sidebar-primary: 0.52 0.21 264;
+    --sidebar-primary-foreground: 0.98 0.005 264;
+    --sidebar-accent: 0.90 0.01 264;
+    --sidebar-accent-foreground: 0.15 0.03 264;
+    --sidebar-border: 0.88 0.02 264;
+    --sidebar-ring: 0.52 0.21 264;
+  }
+
+  .dark {
+    --background: 0.14 0.03 264;
+    --foreground: 0.95 0.01 264;
+    --card: 0.20 0.04 264;
+    --card-foreground: 0.95 0.01 264;
+    --popover: 0.18 0.04 264;
+    --popover-foreground: 0.95 0.01 264;
+    --primary: 0.58 0.21 264;
+    --primary-foreground: 0.98 0.005 264;
+    --secondary: 0.25 0.04 264;
+    --secondary-foreground: 0.95 0.01 264;
+    --muted: 0.25 0.04 264;
+    --muted-foreground: 0.65 0.05 264;
+    --accent: 0.72 0.19 47;
+    --accent-foreground: 0.10 0.02 264;
+    --destructive: 0.62 0.22 27;
+    --destructive-foreground: 0.98 0.005 264;
+    --success: 0.65 0.15 142;
+    --success-foreground: 0.10 0.02 264;
+    --warning: 0.75 0.15 75;
+    --warning-foreground: 0.10 0.02 264;
+    --border: 0.28 0.04 264;
+    --input: 0.28 0.04 264;
+    --ring: 0.58 0.21 264;
+    --chart-1: 0.58 0.21 264;
+    --chart-2: 0.72 0.19 47;
+    --chart-3: 0.65 0.15 142;
+    --chart-4: 0.62 0.22 27;
+    --chart-5: 0.75 0.15 75;
+    --sidebar: 0.18 0.04 264;
+    --sidebar-foreground: 0.95 0.01 264;
+    --sidebar-primary: 0.58 0.21 264;
+    --sidebar-primary-foreground: 0.98 0.005 264;
+    --sidebar-accent: 0.25 0.04 264;
+    --sidebar-accent-foreground: 0.95 0.01 264;
+    --sidebar-border: 0.28 0.04 264;
+    --sidebar-ring: 0.58 0.21 264;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Outfit', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+  .bg-success {
+    background-color: oklch(var(--success));
+  }
+  .text-success {
+    color: oklch(var(--success));
+  }
+  .bg-warning {
+    background-color: oklch(var(--warning));
+  }
+  .text-warning {
+    color: oklch(var(--warning));
+  }
+  .text-accent-custom {
+    color: oklch(var(--accent));
+  }
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, oklch(0.14 0.03 264) 0%, oklch(0.25 0.12 264) 50%, oklch(0.22 0.10 47) 100%);
+  }
+}
+
+/* Scrollbar hide for mobile */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
