@@ -39,6 +39,7 @@ export interface Ride {
   dropArea: string;
   datetime: string;
   netIncome: number;
+  paymentType?: "cash" | "online";
 }
 
 export interface FuelEntry {

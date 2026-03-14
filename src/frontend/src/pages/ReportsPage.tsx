@@ -19,7 +19,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import * as XLSX from "xlsx";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import {
@@ -51,6 +50,46 @@ function calcPeriodData(
   );
   const blankKm = calcBlankKm(runKm, rideDist);
   return { periodRides, periodFuel, income, fuel, rideDist, runKm, blankKm };
+}
+
+/** Best platform and area from rides for display strings */
+function getBestPlatformAndArea(rides: import("../store/useStore").Ride[]): {
+  bestPlatform?: string;
+  bestArea?: string;
+} {
+  if (rides.length < 2) return {};
+  const platformMap: Record<string, { total: number; count: number }> = {};
+  const areaMap: Record<string, { total: number; count: number }> = {};
+  for (const r of rides) {
+    if (!platformMap[r.platform])
+      platformMap[r.platform] = { total: 0, count: 0 };
+    platformMap[r.platform].total += r.netIncome;
+    platformMap[r.platform].count += 1;
+    for (const area of [r.pickupArea, r.dropArea]) {
+      if (!area) continue;
+      if (!areaMap[area]) areaMap[area] = { total: 0, count: 0 };
+      areaMap[area].total += r.netIncome;
+      areaMap[area].count += 1;
+    }
+  }
+  let bestPlatform: { name: string; avg: number } | null = null;
+  for (const [name, { total, count }] of Object.entries(platformMap)) {
+    const avg = total / count;
+    if (!bestPlatform || avg > bestPlatform.avg) bestPlatform = { name, avg };
+  }
+  let bestArea: { name: string; avg: number } | null = null;
+  for (const [name, { total, count }] of Object.entries(areaMap)) {
+    const avg = total / count;
+    if (!bestArea || avg > bestArea.avg) bestArea = { name, avg };
+  }
+  return {
+    bestPlatform: bestPlatform
+      ? `${bestPlatform.name} · ₹${bestPlatform.avg.toFixed(0)}/ride`
+      : undefined,
+    bestArea: bestArea
+      ? `${bestArea.name} · ₹${bestArea.avg.toFixed(0)}/ride`
+      : undefined,
+  };
 }
 
 /** Build per-day summary rows for export */
@@ -213,13 +252,14 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
   }
 
   function exportXLS() {
+    // Simple CSV exported with .xlsx extension (opens in Excel)
     const days = getExportDays();
     const rows = buildExportRows(rides, fuelEntries, odometerSessions, days);
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `biju-report-${dateStr}.xlsx`);
+    download(csv, `biju-report-${dateStr}.xlsx`, "text/csv");
   }
 
   function exportPDF() {
@@ -242,51 +282,116 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
     fuel,
     runKm,
     blankKm,
+    profitPerRide,
+    profitPerKm,
+    bestPlatform,
+    bestArea,
   }: {
     income: number;
     ridesCount: number;
     fuel: number;
     runKm: number;
     blankKm: number;
+    profitPerRide?: number;
+    profitPerKm?: number;
+    bestPlatform?: string;
+    bestArea?: string;
   }) {
+    const profit = income - fuel;
     return (
-      <div className="grid grid-cols-2 gap-3">
-        <SummaryTile
-          label="Income"
-          value={formatAmount(income)}
-          color="oklch(0.72 0.19 47)"
-          bg="oklch(0.72 0.19 47 / 0.12)"
-        />
-        <SummaryTile
-          label="Rides"
-          value={String(ridesCount)}
-          color="oklch(0.58 0.21 264)"
-          bg="oklch(0.58 0.21 264 / 0.12)"
-        />
-        <SummaryTile
-          label="Fuel Cost"
-          value={formatAmount(fuel)}
-          color="oklch(0.62 0.22 27)"
-          bg="oklch(0.62 0.22 27 / 0.12)"
-        />
-        <SummaryTile
-          label="Run KM"
-          value={`${runKm.toFixed(1)} km`}
-          color="oklch(0.65 0.15 142)"
-          bg="oklch(0.65 0.15 142 / 0.12)"
-        />
-        <SummaryTile
-          label="Blank KM"
-          value={`${blankKm.toFixed(1)} km`}
-          color="oklch(0.55 0.12 264)"
-          bg="oklch(0.55 0.12 264 / 0.10)"
-        />
-        <SummaryTile
-          label="Net Profit"
-          value={formatAmount(income - fuel)}
-          color="oklch(0.65 0.15 142)"
-          bg="oklch(0.65 0.15 142 / 0.15)"
-        />
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <SummaryTile
+            label="Income"
+            value={formatAmount(income)}
+            color="oklch(0.72 0.19 47)"
+            bg="oklch(0.72 0.19 47 / 0.12)"
+          />
+          <SummaryTile
+            label="Rides"
+            value={String(ridesCount)}
+            color="oklch(0.58 0.21 264)"
+            bg="oklch(0.58 0.21 264 / 0.12)"
+          />
+          <SummaryTile
+            label="Fuel Cost"
+            value={formatAmount(fuel)}
+            color="oklch(0.62 0.22 27)"
+            bg="oklch(0.62 0.22 27 / 0.12)"
+          />
+          <SummaryTile
+            label="Run KM"
+            value={`${runKm.toFixed(1)} km`}
+            color="oklch(0.65 0.15 142)"
+            bg="oklch(0.65 0.15 142 / 0.12)"
+          />
+          <SummaryTile
+            label="Blank KM"
+            value={`${blankKm.toFixed(1)} km`}
+            color="oklch(0.55 0.12 264)"
+            bg="oklch(0.55 0.12 264 / 0.10)"
+          />
+          <SummaryTile
+            label="Net Profit"
+            value={formatAmount(profit)}
+            color="oklch(0.65 0.15 142)"
+            bg="oklch(0.65 0.15 142 / 0.15)"
+          />
+          {profitPerRide !== undefined && (
+            <SummaryTile
+              label="Profit/Ride"
+              value={formatAmount(profitPerRide)}
+              color="oklch(0.72 0.19 47)"
+              bg="oklch(0.72 0.19 47 / 0.10)"
+            />
+          )}
+          {profitPerKm !== undefined && (
+            <SummaryTile
+              label="Profit/KM"
+              value={formatAmount(profitPerKm)}
+              color="oklch(0.65 0.15 142)"
+              bg="oklch(0.65 0.15 142 / 0.10)"
+            />
+          )}
+        </div>
+        {(bestPlatform || bestArea) && (
+          <div className="flex flex-wrap gap-2">
+            {bestPlatform && (
+              <div
+                className="flex-1 rounded-xl px-3 py-2"
+                style={{
+                  background: "oklch(0.72 0.19 47 / 0.10)",
+                  border: "1px solid oklch(0.72 0.19 47 / 0.2)",
+                }}
+              >
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wider"
+                  style={{ color: "oklch(0.72 0.19 47)" }}
+                >
+                  Best Platform
+                </p>
+                <p className="text-xs font-bold mt-0.5">{bestPlatform}</p>
+              </div>
+            )}
+            {bestArea && (
+              <div
+                className="flex-1 rounded-xl px-3 py-2"
+                style={{
+                  background: "oklch(0.58 0.21 264 / 0.10)",
+                  border: "1px solid oklch(0.58 0.21 264 / 0.2)",
+                }}
+              >
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-wider"
+                  style={{ color: "oklch(0.58 0.21 264)" }}
+                >
+                  Best Area
+                </p>
+                <p className="text-xs font-bold mt-0.5">{bestArea}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -598,13 +703,27 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               <h3 className="font-display font-semibold mb-3">
                 Today — {formatISTDate(today)}
               </h3>
-              <SummaryGrid
-                income={todayIncome}
-                ridesCount={todayRides.length}
-                fuel={todayFuelCost}
-                runKm={todayRunKm}
-                blankKm={todayBlankKm}
-              />
+              {(() => {
+                const todayProfit = todayIncome - todayFuelCost;
+                const ppr =
+                  todayRides.length > 0 ? todayProfit / todayRides.length : 0;
+                const ppk = todayRunKm > 0 ? todayProfit / todayRunKm : 0;
+                const { bestPlatform: bp, bestArea: ba } =
+                  getBestPlatformAndArea(todayRides);
+                return (
+                  <SummaryGrid
+                    income={todayIncome}
+                    ridesCount={todayRides.length}
+                    fuel={todayFuelCost}
+                    runKm={todayRunKm}
+                    blankKm={todayBlankKm}
+                    profitPerRide={ppr}
+                    profitPerKm={ppk}
+                    bestPlatform={bp}
+                    bestArea={ba}
+                  />
+                );
+              })()}
             </div>
             <Charts chartData={todayChartData} />
             <AnalyticsSection
@@ -620,13 +739,30 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               <h3 className="font-display font-semibold mb-3">
                 {t.reports.summary}
               </h3>
-              <SummaryGrid
-                income={weekData.income}
-                ridesCount={weekData.periodRides.length}
-                fuel={weekData.fuel}
-                runKm={weekData.runKm}
-                blankKm={weekData.blankKm}
-              />
+              {(() => {
+                const weekProfit = weekData.income - weekData.fuel;
+                const ppr =
+                  weekData.periodRides.length > 0
+                    ? weekProfit / weekData.periodRides.length
+                    : 0;
+                const ppk =
+                  weekData.runKm > 0 ? weekProfit / weekData.runKm : 0;
+                const { bestPlatform: bp, bestArea: ba } =
+                  getBestPlatformAndArea(weekData.periodRides);
+                return (
+                  <SummaryGrid
+                    income={weekData.income}
+                    ridesCount={weekData.periodRides.length}
+                    fuel={weekData.fuel}
+                    runKm={weekData.runKm}
+                    blankKm={weekData.blankKm}
+                    profitPerRide={ppr}
+                    profitPerKm={ppk}
+                    bestPlatform={bp}
+                    bestArea={ba}
+                  />
+                );
+              })()}
             </div>
             <Charts chartData={weekChartData} />
             <AnalyticsSection
@@ -642,13 +778,30 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               <h3 className="font-display font-semibold mb-3">
                 {t.reports.summary}
               </h3>
-              <SummaryGrid
-                income={monthData.income}
-                ridesCount={monthData.periodRides.length}
-                fuel={monthData.fuel}
-                runKm={monthData.runKm}
-                blankKm={monthData.blankKm}
-              />
+              {(() => {
+                const monthProfit = monthData.income - monthData.fuel;
+                const ppr =
+                  monthData.periodRides.length > 0
+                    ? monthProfit / monthData.periodRides.length
+                    : 0;
+                const ppk =
+                  monthData.runKm > 0 ? monthProfit / monthData.runKm : 0;
+                const { bestPlatform: bp, bestArea: ba } =
+                  getBestPlatformAndArea(monthData.periodRides);
+                return (
+                  <SummaryGrid
+                    income={monthData.income}
+                    ridesCount={monthData.periodRides.length}
+                    fuel={monthData.fuel}
+                    runKm={monthData.runKm}
+                    blankKm={monthData.blankKm}
+                    profitPerRide={ppr}
+                    profitPerKm={ppk}
+                    bestPlatform={bp}
+                    bestArea={ba}
+                  />
+                );
+              })()}
             </div>
             <Charts chartData={monthChartData} />
             <AnalyticsSection
@@ -683,6 +836,11 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                 const dRunKm = dOdo ? calcRunKm(dOdo.startKm, dOdo.endKm) : 0;
                 const dRideDist = calcRideKm(dRides);
                 const dBlankKm = calcBlankKm(dRunKm, dRideDist);
+                const dProfit = dIncome - dFuelCost;
+                const dPpr = dRides.length > 0 ? dProfit / dRides.length : 0;
+                const dPpk = dRunKm > 0 ? dProfit / dRunKm : 0;
+                const { bestPlatform: dBp, bestArea: dBa } =
+                  getBestPlatformAndArea(dRides);
                 return (
                   <SummaryGrid
                     income={dIncome}
@@ -690,6 +848,10 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                     fuel={dFuelCost}
                     runKm={dRunKm}
                     blankKm={dBlankKm}
+                    profitPerRide={dPpr}
+                    profitPerKm={dPpk}
+                    bestPlatform={dBp}
+                    bestArea={dBa}
                   />
                 );
               })()}

@@ -41,7 +41,7 @@ export default function Header({ title, onAvatarClick }: HeaderProps) {
 
       <div className="flex-1 min-w-0">
         <h1 className="text-[15px] font-bold font-display leading-tight tracking-tight text-white">
-          Biju Ride Ledger
+          Biju's RideBook
         </h1>
         {title && (
           <p
@@ -59,7 +59,7 @@ export default function Header({ title, onAvatarClick }: HeaderProps) {
         data-ocid="header.avatar.button"
         onClick={onAvatarClick}
         className="flex-shrink-0 rounded-full ring-2 ring-white/20 hover:ring-white/40 transition-all active:scale-95"
-        aria-label="Open Settings"
+        aria-label="Open Profile"
       >
         <Avatar className="w-9 h-9">
           <AvatarImage src={settings.profilePicture || undefined} />

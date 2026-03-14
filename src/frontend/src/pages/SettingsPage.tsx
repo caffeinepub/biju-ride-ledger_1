@@ -1,9 +1,3 @@
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,9 +23,15 @@ import {
 
 interface SettingsPageProps {
   onAvatarClick?: () => void;
+  appTheme?: "light" | "dark";
+  onThemeChange?: (theme: "light" | "dark") => void;
 }
 
-export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
+export default function SettingsPage({
+  onAvatarClick,
+  appTheme,
+  onThemeChange,
+}: SettingsPageProps) {
   const { settings, updateSettings } = useStore();
   const t = getTranslations(settings.language);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +46,12 @@ export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
   const [platformCommissions, setPlatformCommissions] = useState({
     ...settings.platformCommissions,
   });
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem("biju_sound_enabled") !== "false";
+  });
+  const [selectedCommissionPlatform, setSelectedCommissionPlatform] = useState<
+    Platform | ""
+  >("");
 
   const handleSave = () => {
     updateSettings({
@@ -202,69 +208,120 @@ export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
           />
         </div>
 
-        {/* Platform Commissions */}
+        {/* Platform Commissions — redesigned with single dropdown panel */}
         <div className="rounded-2xl bg-card border border-border p-4">
           <h3 className="font-display font-semibold mb-3">
             {t.settings.platformCommissions}
           </h3>
-          <Accordion type="single" collapsible>
-            {PLATFORMS.map((platform) => (
-              <AccordionItem key={platform} value={platform}>
-                <AccordionTrigger className="text-sm font-semibold">
-                  {platform}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-3 pb-2">
-                    <div>
-                      <Label className="text-xs">
-                        {t.settings.commissionType}
-                      </Label>
-                      <Select
-                        value={platformCommissions[platform].type}
-                        onValueChange={(v) =>
-                          updateCommission(platform, "type", v)
-                        }
-                      >
-                        <SelectTrigger
-                          data-ocid="settings.commission.select"
-                          className="mt-1 h-10"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No Commission</SelectItem>
-                          <SelectItem value="percentage">
-                            Percentage (%)
-                          </SelectItem>
-                          <SelectItem value="fixed">
-                            Fixed Amount (₹)
-                          </SelectItem>
-                          <SelectItem value="daily_fee">
-                            Daily Platform Fee (₹)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {platformCommissions[platform].type !== "none" && (
-                      <div>
-                        <Label className="text-xs">
-                          {t.settings.commissionValue}
-                        </Label>
-                        <Input
-                          type="number"
-                          value={String(platformCommissions[platform].value)}
-                          onChange={(e) =>
-                            updateCommission(platform, "value", e.target.value)
-                          }
-                          className="mt-1 h-10 text-sm"
-                        />
-                      </div>
+
+          {/* Platform selector */}
+          <Select
+            value={selectedCommissionPlatform}
+            onValueChange={(v) => setSelectedCommissionPlatform(v as Platform)}
+          >
+            <SelectTrigger
+              data-ocid="settings.platform.select"
+              className="h-11 mb-3"
+            >
+              <SelectValue placeholder="Select Platform" />
+            </SelectTrigger>
+            <SelectContent>
+              {PLATFORMS.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Config panel for selected platform */}
+          {selectedCommissionPlatform && (
+            <div
+              className="rounded-xl p-3 border space-y-3"
+              style={{
+                background: "oklch(0.58 0.21 264 / 0.06)",
+                borderColor: "oklch(0.58 0.21 264 / 0.2)",
+              }}
+            >
+              <p
+                className="text-sm font-semibold"
+                style={{ color: "oklch(0.65 0.15 264)" }}
+              >
+                {selectedCommissionPlatform}
+              </p>
+              <div>
+                <Label className="text-xs">{t.settings.commissionType}</Label>
+                <Select
+                  value={platformCommissions[selectedCommissionPlatform].type}
+                  onValueChange={(v) =>
+                    updateCommission(
+                      selectedCommissionPlatform,
+                      "type",
+                      v as CommissionType,
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    data-ocid="settings.commissiontype.select"
+                    className="mt-1 h-10"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Commission</SelectItem>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                    <SelectItem value="daily_fee">
+                      Daily Platform Fee (₹)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {platformCommissions[selectedCommissionPlatform].type !==
+                "none" && (
+                <div>
+                  <Label className="text-xs">
+                    {t.settings.commissionValue}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={String(
+                      platformCommissions[selectedCommissionPlatform].value,
                     )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+                    onChange={(e) =>
+                      updateCommission(
+                        selectedCommissionPlatform,
+                        "value",
+                        e.target.value,
+                      )
+                    }
+                    className="mt-1 h-10 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick overview of all saved commissions */}
+          <div className="mt-3 space-y-1">
+            {PLATFORMS.filter(
+              (p) => platformCommissions[p].type !== "none",
+            ).map((p) => (
+              <div
+                key={p}
+                className="flex items-center justify-between text-xs py-1"
+              >
+                <span className="text-muted-foreground">{p}</span>
+                <span className="font-medium">
+                  {platformCommissions[p].type === "percentage"
+                    ? `${platformCommissions[p].value}%`
+                    : platformCommissions[p].type === "fixed"
+                      ? `₹${platformCommissions[p].value} fixed`
+                      : `₹${platformCommissions[p].value}/day`}
+                </span>
+              </div>
             ))}
-          </Accordion>
+          </div>
         </div>
 
         {/* Fuel Settings */}
@@ -351,6 +408,71 @@ export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
           </div>
         </div>
 
+        {/* App Preferences */}
+        <div className="rounded-2xl bg-card border border-border p-4">
+          <h3 className="font-display font-semibold mb-3">App Preferences</h3>
+
+          {/* Theme */}
+          <div className="mb-4">
+            <Label className="text-sm font-medium mb-2 block">App Theme</Label>
+            <div className="flex gap-2" data-ocid="settings.theme.toggle">
+              {(["light", "dark"] as const).map((th) => (
+                <button
+                  type="button"
+                  key={th}
+                  onClick={() => onThemeChange?.(th)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all capitalize"
+                  style={{
+                    background:
+                      appTheme === th
+                        ? "oklch(0.58 0.21 264)"
+                        : "oklch(var(--muted))",
+                    color:
+                      appTheme === th
+                        ? "white"
+                        : "oklch(var(--muted-foreground))",
+                  }}
+                >
+                  {th === "light" ? "☀️ Light" : "🌙 Dark"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sound */}
+          <div>
+            <Label className="text-sm font-medium mb-2 block">App Sound</Label>
+            <div className="flex gap-2" data-ocid="settings.sound.toggle">
+              {(["on", "off"] as const).map((s) => {
+                const isOn = soundEnabled === (s === "on");
+                return (
+                  <button
+                    type="button"
+                    key={s}
+                    onClick={() => {
+                      const newVal = s === "on";
+                      setSoundEnabled(newVal);
+                      localStorage.setItem(
+                        "biju_sound_enabled",
+                        String(newVal),
+                      );
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all uppercase"
+                    style={{
+                      background: isOn
+                        ? "oklch(0.65 0.15 142)"
+                        : "oklch(var(--muted))",
+                      color: isOn ? "white" : "oklch(var(--muted-foreground))",
+                    }}
+                  >
+                    {s === "on" ? "🔊 ON" : "🔇 OFF"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <Button
           data-ocid="settings.save.button"
           className="w-full h-14 rounded-xl text-base font-bold text-white"
@@ -362,6 +484,15 @@ export default function SettingsPage({ onAvatarClick }: SettingsPageProps) {
         >
           {t.settings.save}
         </Button>
+
+        {/* About Section */}
+        <div className="rounded-2xl bg-card border border-border p-4">
+          <h3 className="font-display font-semibold mb-2">About</h3>
+          <p className="text-sm font-semibold">Biju's RideBook v5.0</p>
+          <p className="text-xs text-muted-foreground">
+            Smart Earnings Tracker for Ride Drivers
+          </p>
+        </div>
 
         {/* Footer */}
         <footer className="text-center py-4 text-xs text-muted-foreground">

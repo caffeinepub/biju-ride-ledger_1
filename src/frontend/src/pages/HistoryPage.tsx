@@ -262,7 +262,7 @@ export default function HistoryPage({
                       </p>
                       <p
                         className="text-sm font-bold"
-                        style={{ color: "oklch(0.65 0.15 142)" }}
+                        style={{ color: "oklch(0.72 0.19 47)" }}
                       >
                         {formatAmount(dayIncome)}
                       </p>
@@ -353,6 +353,9 @@ export default function HistoryPage({
                                 Comm: {formatAmount(ride.commission)}
                               </span>
                             )}
+                            <span className="text-xs text-muted-foreground">
+                              Tips: ₹{(ride.tips ?? 0).toFixed(0)}
+                            </span>
                           </div>
                         </motion.div>
                       );

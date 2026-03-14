@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import BottomNav, { type TabName } from "./components/BottomNav";
 import SplashScreen from "./components/SplashScreen";
+import TargetCelebration from "./components/TargetCelebration";
 import AddRidePage from "./pages/AddRidePage";
 import DriverProfilePage from "./pages/DriverProfilePage";
 import HistoryPage from "./pages/HistoryPage";
@@ -23,16 +24,16 @@ function AppInner() {
   const [activeTab, setActiveTab] = useState<TabName>("home");
   const [editingRide, setEditingRide] = useState<Ride | null>(null);
   const [showDriverProfile, setShowDriverProfile] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  const [appTheme, setAppTheme] = useState<"light" | "dark">(() => {
+    return (localStorage.getItem("biju_theme") as "light" | "dark") || "light";
+  });
 
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = (e: MediaQueryList | MediaQueryListEvent) => {
-      document.documentElement.classList.toggle("dark", e.matches);
-    };
-    update(mq);
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
+    document.documentElement.classList.toggle("dark", appTheme === "dark");
+    localStorage.setItem("biju_theme", appTheme);
+  }, [appTheme]);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem("splashShownAt", String(Date.now()));
@@ -81,6 +82,7 @@ function AppInner() {
           editRide={editingRide}
           onSaved={editingRide ? handleRideSaved : undefined}
           onAvatarClick={goToDriverProfile}
+          onTargetReached={() => setShowCelebration(true)}
         />
       )}
       {activeTab === "history" && (
@@ -93,7 +95,11 @@ function AppInner() {
         <ReportsPage onAvatarClick={goToDriverProfile} />
       )}
       {activeTab === "settings" && (
-        <SettingsPage onAvatarClick={goToDriverProfile} />
+        <SettingsPage
+          onAvatarClick={goToDriverProfile}
+          appTheme={appTheme}
+          onThemeChange={setAppTheme}
+        />
       )}
       <BottomNav
         active={activeTab}
@@ -103,6 +109,9 @@ function AppInner() {
         }}
       />
       <Toaster position="top-center" richColors />
+      {showCelebration && (
+        <TargetCelebration onClose={() => setShowCelebration(false)} />
+      )}
     </div>
   );
 }

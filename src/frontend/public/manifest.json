@@ -1,6 +1,6 @@
 {
-  "name": "Biju Ride Ledger",
-  "short_name": "BijuLedger",
+  "name": "Biju's RideBook",
+  "short_name": "RideBook",
   "description": "Smart Earnings Tracker for Ride Drivers",
   "start_url": "/",
   "display": "standalone",

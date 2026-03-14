@@ -43,7 +43,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
         >
           <img
             src="/assets/uploads/Picsart_26-03-10_08-21-36-613-1.png"
-            alt="Biju Ride Ledger Logo"
+            alt="Biju's RideBook Logo"
             className="w-28 h-28 object-contain drop-shadow-2xl"
           />
         </motion.div>
@@ -55,7 +55,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
           transition={{ duration: 0.5, delay: 0.5 }}
         >
           <h1 className="text-3xl font-bold font-display text-white tracking-tight">
-            Biju Ride Ledger
+            Biju's RideBook
           </h1>
           <p className="text-sm text-white/70 text-center">
             Smart Earnings Tracker for Ride Drivers

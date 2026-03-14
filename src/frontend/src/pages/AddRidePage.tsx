@@ -17,9 +17,11 @@ import { getTranslations } from "../i18n";
 import {
   PLATFORMS,
   type Platform,
+  getISTDateString,
   getISTDatetimeLocal,
   useStore,
 } from "../store/useStore";
+import { useSound } from "../utils/useSound";
 
 // Speech Recognition type declarations
 interface SpeechRecognitionEvent extends Event {
@@ -58,28 +60,41 @@ interface AddRidePageProps {
     dropArea: string;
     datetime: string;
     netIncome: number;
+    paymentType?: "cash" | "online";
   } | null;
   onSaved?: () => void;
   onAvatarClick?: () => void;
+  onTargetReached?: () => void;
 }
 
 export default function AddRidePage({
   editRide,
   onSaved,
   onAvatarClick,
+  onTargetReached,
 }: AddRidePageProps) {
-  const { addRide, updateRide, settings, getAreaSuggestions, formatAmount } =
-    useStore();
+  const {
+    addRide,
+    updateRide,
+    settings,
+    rides,
+    getAreaSuggestions,
+    formatAmount,
+  } = useStore();
   const t = getTranslations(settings.language);
+  const { playClick, playSuccess } = useSound();
 
   const [platform, setPlatform] = useState<Platform>(
     editRide?.platform || "Uber",
+  );
+  const [paymentType, setPaymentType] = useState<"cash" | "online">(
+    editRide?.paymentType || "cash",
   );
   const [fare, setFare] = useState(editRide ? String(editRide.fare) : "");
   const [commission, setCommission] = useState(
     editRide ? String(editRide.commission) : "",
   );
-  const [tips, setTips] = useState(editRide ? String(editRide.tips) : "0");
+  const [tips, setTips] = useState(editRide ? String(editRide.tips) : "");
   const [customerPaid, setCustomerPaid] = useState("");
   const [distance, setDistance] = useState(
     editRide ? String(editRide.distance) : "",
@@ -98,7 +113,7 @@ export default function AddRidePage({
     null,
   );
 
-  // Auto-calculate commission when platform or fare changes
+  // Auto-calculate commission when platform or fare changes (new rides only)
   useEffect(() => {
     if (editRide) return;
     const rule = settings.platformCommissions[platform];
@@ -106,26 +121,32 @@ export default function AddRidePage({
     if (rule.type === "percentage")
       setCommission(String(((fareNum * rule.value) / 100).toFixed(2)));
     else if (rule.type === "fixed") setCommission(String(rule.value));
-    else setCommission("0");
+    else setCommission("");
   }, [platform, fare, settings.platformCommissions, editRide]);
 
-  // Auto-calculate tips from customerPaid
+  // Auto-calculate tips/netIncome based on payment type (Cash only)
   const handleCustomerPaidChange = (val: string) => {
     setCustomerPaid(val);
-    const paid = Number.parseFloat(val) || 0;
-    if (paid > 0) {
-      const fareNum = Number.parseFloat(fare) || 0;
-      const commNum = Number.parseFloat(commission) || 0;
-      const driverReceives = fareNum - commNum;
-      const calculatedTip = paid - driverReceives;
-      setTips(calculatedTip >= 0 ? String(calculatedTip.toFixed(2)) : "0");
+    if (paymentType === "cash") {
+      const paid = Number.parseFloat(val) || 0;
+      if (paid > 0) {
+        const fareNum = Number.parseFloat(fare) || 0;
+        const calculatedTip = paid - fareNum;
+        setTips(calculatedTip >= 0 ? String(calculatedTip.toFixed(2)) : "0");
+      }
     }
   };
 
   const fareNum = Number.parseFloat(fare) || 0;
   const commissionNum = Number.parseFloat(commission) || 0;
   const tipsNum = Number.parseFloat(tips) || 0;
-  const netIncome = fareNum - commissionNum + tipsNum;
+  const customerPaidNum = Number.parseFloat(customerPaid) || 0;
+
+  // Net income varies by payment type
+  const netIncome =
+    paymentType === "cash" && customerPaidNum > 0
+      ? customerPaidNum - commissionNum
+      : fareNum - commissionNum + tipsNum;
 
   const handlePickupChange = (val: string) => {
     setPickupArea(val);
@@ -156,17 +177,36 @@ export default function AddRidePage({
       dropArea,
       datetime: new Date(date).toISOString(),
       netIncome,
+      paymentType,
     };
     if (editRide) {
       updateRide(editRide.id, rideData);
       toast.success("Ride updated!");
+      playSuccess();
     } else {
       addRide(rideData);
       toast.success("Ride saved!");
+      playSuccess();
+
+      // Check if daily target crossed for first time today
+      const todayKey = `biju_target_celebrated_${getISTDateString()}`;
+      if (!localStorage.getItem(todayKey)) {
+        const todayStr = getISTDateString();
+        const todayTotal =
+          rides
+            .filter((r) => r.datetime.startsWith(todayStr))
+            .reduce((sum, r) => sum + r.netIncome, 0) + netIncome;
+        if (todayTotal >= settings.dailyTarget && settings.dailyTarget > 0) {
+          localStorage.setItem(todayKey, "1");
+          onTargetReached?.();
+        }
+      }
+
       setPlatform("Uber");
+      setPaymentType("cash");
       setFare("");
       setCommission("");
-      setTips("0");
+      setTips("");
       setCustomerPaid("");
       setDistance("");
       setPickupArea("");
@@ -240,7 +280,11 @@ export default function AddRidePage({
             variant="outline"
             size="sm"
             className="gap-2 rounded-xl"
-            onClick={listening ? stopVoice : startVoice}
+            onClick={() => {
+              playClick();
+              if (listening) stopVoice();
+              else startVoice();
+            }}
             style={{
               borderColor: listening
                 ? "oklch(0.62 0.22 27)"
@@ -253,7 +297,7 @@ export default function AddRidePage({
           </Button>
         </div>
 
-        {/* Platform selector — clean dropdown */}
+        {/* Platform selector */}
         <div className="mb-4">
           <Label className="text-xs mb-2 block">{t.addRide.platform}</Label>
           <Select
@@ -277,6 +321,55 @@ export default function AddRidePage({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Payment Type Toggle */}
+        <div className="mb-4">
+          <Label className="text-xs mb-2 block">Payment Type</Label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-ocid="addride.paymenttype.cash"
+              onClick={() => {
+                setPaymentType("cash");
+                setCustomerPaid("");
+              }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{
+                background:
+                  paymentType === "cash"
+                    ? "oklch(0.58 0.21 264)"
+                    : "oklch(var(--muted))",
+                color:
+                  paymentType === "cash"
+                    ? "white"
+                    : "oklch(var(--muted-foreground))",
+              }}
+            >
+              💵 Cash
+            </button>
+            <button
+              type="button"
+              data-ocid="addride.paymenttype.online"
+              onClick={() => {
+                setPaymentType("online");
+                setCustomerPaid("");
+              }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{
+                background:
+                  paymentType === "online"
+                    ? "oklch(0.58 0.21 264)"
+                    : "oklch(var(--muted))",
+                color:
+                  paymentType === "online"
+                    ? "white"
+                    : "oklch(var(--muted-foreground))",
+              }}
+            >
+              📱 Online
+            </button>
+          </div>
         </div>
 
         {/* Net Income Banner */}
@@ -320,7 +413,7 @@ export default function AddRidePage({
               <Input
                 data-ocid="addride.commission.input"
                 type="number"
-                placeholder="0"
+                placeholder="Auto-calc"
                 value={commission}
                 onChange={(e) => setCommission(e.target.value)}
                 className="mt-1 h-12 text-base"
@@ -331,31 +424,36 @@ export default function AddRidePage({
               <Input
                 data-ocid="addride.tips.input"
                 type="number"
-                placeholder="0"
+                placeholder={paymentType === "online" ? "Enter tips" : "Auto"}
                 value={tips}
                 onChange={(e) => setTips(e.target.value)}
                 className="mt-1 h-12 text-base"
+                readOnly={paymentType === "cash" && customerPaid !== ""}
               />
             </div>
           </div>
 
-          {/* Customer Paid — auto-calculates tips */}
-          <div>
-            <Label className="text-xs">Customer Paid (₹)</Label>
-            <Input
-              data-ocid="addride.customerpaid.input"
-              type="number"
-              placeholder="e.g. 110"
-              value={customerPaid}
-              onChange={(e) => handleCustomerPaidChange(e.target.value)}
-              className="mt-1 h-12 text-base"
-            />
-            {customerPaid && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Tips auto-calculated: {formatAmount(tipsNum)}
-              </p>
-            )}
-          </div>
+          {/* Customer Paid — visible for Cash only */}
+          {paymentType === "cash" && (
+            <div>
+              <Label className="text-xs">Customer Paid (₹)</Label>
+              <Input
+                data-ocid="addride.customerpaid.input"
+                type="number"
+                placeholder="e.g. 110"
+                value={customerPaid}
+                onChange={(e) => handleCustomerPaidChange(e.target.value)}
+                className="mt-1 h-12 text-base"
+              />
+              {paymentType === "cash" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {customerPaidNum > 0
+                    ? `Tip: ${formatAmount(tipsNum)} · Net: ${formatAmount(netIncome)}`
+                    : "Enter amount customer handed you"}
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <Label className="text-xs">{t.addRide.distance}</Label>

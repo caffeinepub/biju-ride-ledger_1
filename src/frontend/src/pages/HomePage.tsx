@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Fuel, Save, Target, TrendingUp, Zap } from "lucide-react";
+import { Fuel, Save, Star, Target, TrendingUp, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,43 @@ import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
 
 interface HomePageProps {
   onAvatarClick?: () => void;
+}
+
+/** Best platform from a set of rides: platform with highest avg netIncome per ride */
+function getBestPlatform(rides: import("../store/useStore").Ride[]) {
+  if (rides.length < 2) return null;
+  const map: Record<string, { total: number; count: number }> = {};
+  for (const r of rides) {
+    if (!map[r.platform]) map[r.platform] = { total: 0, count: 0 };
+    map[r.platform].total += r.netIncome;
+    map[r.platform].count += 1;
+  }
+  let best: { platform: string; avg: number } | null = null;
+  for (const [platform, { total, count }] of Object.entries(map)) {
+    const avg = total / count;
+    if (!best || avg > best.avg) best = { platform, avg };
+  }
+  return best;
+}
+
+/** Best area from a set of rides: area with highest avg netIncome among rides where area = pickup or drop */
+function getBestArea(rides: import("../store/useStore").Ride[]) {
+  if (rides.length < 2) return null;
+  const map: Record<string, { total: number; count: number }> = {};
+  for (const r of rides) {
+    for (const area of [r.pickupArea, r.dropArea]) {
+      if (!area) continue;
+      if (!map[area]) map[area] = { total: 0, count: 0 };
+      map[area].total += r.netIncome;
+      map[area].count += 1;
+    }
+  }
+  let best: { area: string; avg: number } | null = null;
+  for (const [area, { total, count }] of Object.entries(map)) {
+    const avg = total / count;
+    if (!best || avg > best.avg) best = { area, avg };
+  }
+  return best;
 }
 
 export default function HomePage({ onAvatarClick }: HomePageProps) {
@@ -78,11 +115,29 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
   const endKmNum = Number.parseFloat(endKm) || 0;
   const dayDistance = calcRunKm(startKmNum, endKmNum);
 
+  // Today's run km from today's odometer session
+  const todayOdoSession = odometerSessions.find((s) => s.date === today);
+  const todayRunKm = todayOdoSession
+    ? calcRunKm(todayOdoSession.startKm, todayOdoSession.endKm)
+    : 0;
+  const todayRideKm = useMemo(() => calcRideKm(todayRides), [todayRides]);
+  const todayBlankKm = calcBlankKm(todayRunKm, todayRideKm);
+
   // Blank km for selected odo date using consistent formula
   const selectedDateRideKm = useMemo(() => {
     return calcRideKm(rides.filter((r) => r.datetime.startsWith(odoDate)));
   }, [rides, odoDate]);
   const blankKm = calcBlankKm(dayDistance, selectedDateRideKm);
+
+  // ─── Profit Analyzer ───
+  const profitPerRide =
+    todayRides.length > 0 ? netProfit / todayRides.length : 0;
+  const profitPerKm = todayRunKm > 0 ? netProfit / todayRunKm : 0;
+  const deadKm = todayBlankKm; // Same as Blank KM per spec
+
+  // ─── Best Platform & Best Area (today only) ───
+  const bestPlatform = useMemo(() => getBestPlatform(todayRides), [todayRides]);
+  const bestArea = useMemo(() => getBestArea(todayRides), [todayRides]);
 
   const progressPct =
     settings.dailyTarget > 0
@@ -199,9 +254,161 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           </div>
         </motion.div>
 
-        {/* ─── All-Time Totals ─── */}
+        {/* ─── Profit Analyzer ─── */}
         <motion.div
           {...fadeUp(0.06)}
+          data-ocid="dashboard.profit_analyzer.card"
+          className="rounded-2xl p-4 border"
+          style={{
+            background: "oklch(0.58 0.21 264 / 0.08)",
+            borderColor: "oklch(0.58 0.21 264 / 0.25)",
+          }}
+        >
+          <p
+            className="text-[11px] font-semibold uppercase tracking-widest mb-3"
+            style={{ color: "oklch(0.65 0.15 264)" }}
+          >
+            Profit Analyzer
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className="rounded-xl p-3"
+              style={{ background: "oklch(0.72 0.19 47 / 0.12)" }}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Today's Profit
+              </p>
+              <p
+                className="text-lg font-bold font-display"
+                style={{ color: "oklch(0.72 0.19 47)" }}
+              >
+                {formatAmount(netProfit)}
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-3"
+              style={{ background: "oklch(0.58 0.21 264 / 0.12)" }}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Profit/Ride
+              </p>
+              <p
+                className="text-lg font-bold font-display"
+                style={{ color: "oklch(0.58 0.21 264)" }}
+              >
+                {formatAmount(profitPerRide)}
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-3"
+              style={{ background: "oklch(0.65 0.15 142 / 0.12)" }}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Profit/KM
+              </p>
+              <p
+                className="text-lg font-bold font-display"
+                style={{ color: "oklch(0.65 0.15 142)" }}
+              >
+                {formatAmount(profitPerKm)}
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-3"
+              style={{ background: "oklch(0.62 0.22 27 / 0.12)" }}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                Dead KM
+              </p>
+              <p
+                className="text-lg font-bold font-display"
+                style={{ color: "oklch(0.62 0.22 27)" }}
+              >
+                {deadKm.toFixed(1)} km
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ─── Best Platform & Best Area ─── */}
+        <motion.div {...fadeUp(0.08)} className="grid grid-cols-2 gap-3">
+          <div
+            data-ocid="dashboard.best_platform.card"
+            className="rounded-2xl p-3 border"
+            style={{
+              background: "oklch(0.72 0.19 47 / 0.08)",
+              borderColor: "oklch(0.72 0.19 47 / 0.25)",
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <Star
+                size={12}
+                style={{ color: "oklch(0.72 0.19 47)" }}
+                fill="oklch(0.72 0.19 47)"
+              />
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: "oklch(0.72 0.19 47)" }}
+              >
+                Best Platform
+              </p>
+            </div>
+            {bestPlatform ? (
+              <>
+                <p className="text-sm font-bold leading-tight">
+                  {bestPlatform.platform}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Avg {formatAmount(bestPlatform.avg)}/ride
+                </p>
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                Need more rides for analysis
+              </p>
+            )}
+          </div>
+          <div
+            data-ocid="dashboard.best_area.card"
+            className="rounded-2xl p-3 border"
+            style={{
+              background: "oklch(0.58 0.21 264 / 0.08)",
+              borderColor: "oklch(0.58 0.21 264 / 0.25)",
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <Star
+                size={12}
+                style={{ color: "oklch(0.58 0.21 264)" }}
+                fill="oklch(0.58 0.21 264)"
+              />
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: "oklch(0.58 0.21 264)" }}
+              >
+                Best Area
+              </p>
+            </div>
+            {bestArea ? (
+              <>
+                <p className="text-sm font-bold leading-tight">
+                  {bestArea.area}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Avg {formatAmount(bestArea.avg)}/ride
+                </p>
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                Need more rides for analysis
+              </p>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ─── All-Time Totals ─── */}
+        <motion.div
+          {...fadeUp(0.1)}
           className="rounded-2xl p-4 border"
           style={{
             background: "oklch(0.65 0.15 142 / 0.08)",
@@ -256,7 +463,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
 
         {/* ─── Distance Card ─── */}
         <motion.div
-          {...fadeUp(0.08)}
+          {...fadeUp(0.12)}
           className="rounded-2xl px-4 py-4 border"
           style={{
             background: "oklch(0.58 0.21 264 / 0.10)",
@@ -281,7 +488,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
 
         {/* ─── Daily Target ─── */}
         <motion.div
-          {...fadeUp(0.12)}
+          {...fadeUp(0.14)}
           className="rounded-2xl p-4 border bg-card"
           style={{
             borderColor: "oklch(var(--border))",
