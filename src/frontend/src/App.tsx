@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import BottomNav, { type TabName } from "./components/BottomNav";
 import SplashScreen from "./components/SplashScreen";
 import AddRidePage from "./pages/AddRidePage";
+import DriverProfilePage from "./pages/DriverProfilePage";
 import HistoryPage from "./pages/HistoryPage";
 import HomePage from "./pages/HomePage";
 import ReportsPage from "./pages/ReportsPage";
@@ -21,6 +22,7 @@ function AppInner() {
   const [showSplash, setShowSplash] = useState(shouldShowSplash);
   const [activeTab, setActiveTab] = useState<TabName>("home");
   const [editingRide, setEditingRide] = useState<Ride | null>(null);
+  const [showDriverProfile, setShowDriverProfile] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -47,28 +49,51 @@ function AppInner() {
     setActiveTab("history");
   };
 
-  const goToSettings = () => setActiveTab("settings");
+  const goToSettings = () => {
+    setShowDriverProfile(false);
+    setActiveTab("settings");
+  };
+
+  const goToDriverProfile = () => setShowDriverProfile(true);
 
   if (showSplash) {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
+  // Driver profile overlay (appears over everything except splash)
+  if (showDriverProfile) {
+    return (
+      <div className="relative min-h-screen max-w-md mx-auto">
+        <DriverProfilePage
+          onBack={() => setShowDriverProfile(false)}
+          onEditProfile={goToSettings}
+        />
+        <Toaster position="top-center" richColors />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen max-w-md mx-auto">
-      {activeTab === "home" && <HomePage onAvatarClick={goToSettings} />}
+      {activeTab === "home" && <HomePage onAvatarClick={goToDriverProfile} />}
       {activeTab === "addRide" && (
         <AddRidePage
           editRide={editingRide}
           onSaved={editingRide ? handleRideSaved : undefined}
-          onAvatarClick={goToSettings}
+          onAvatarClick={goToDriverProfile}
         />
       )}
       {activeTab === "history" && (
-        <HistoryPage onEditRide={handleEditRide} onAvatarClick={goToSettings} />
+        <HistoryPage
+          onEditRide={handleEditRide}
+          onAvatarClick={goToDriverProfile}
+        />
       )}
-      {activeTab === "reports" && <ReportsPage onAvatarClick={goToSettings} />}
+      {activeTab === "reports" && (
+        <ReportsPage onAvatarClick={goToDriverProfile} />
+      )}
       {activeTab === "settings" && (
-        <SettingsPage onAvatarClick={goToSettings} />
+        <SettingsPage onAvatarClick={goToDriverProfile} />
       )}
       <BottomNav
         active={activeTab}

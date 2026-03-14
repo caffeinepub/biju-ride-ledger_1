@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Mic, MicOff, Save } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -39,16 +46,6 @@ interface SpeechRecognition extends EventTarget {
 }
 declare const SpeechRecognition: { new (): SpeechRecognition };
 
-const PLATFORM_COLORS: Record<Platform, string> = {
-  Uber: "#000000",
-  InDrive: "#16a34a",
-  YatriSathi: "#1a56db",
-  Rapido: "#ea580c",
-  Ola: "#eab308",
-  Porter: "#0891b2",
-  Other: "#6b7280",
-};
-
 interface AddRidePageProps {
   editRide?: {
     id: string;
@@ -83,6 +80,7 @@ export default function AddRidePage({
     editRide ? String(editRide.commission) : "",
   );
   const [tips, setTips] = useState(editRide ? String(editRide.tips) : "0");
+  const [customerPaid, setCustomerPaid] = useState("");
   const [distance, setDistance] = useState(
     editRide ? String(editRide.distance) : "",
   );
@@ -110,6 +108,19 @@ export default function AddRidePage({
     else if (rule.type === "fixed") setCommission(String(rule.value));
     else setCommission("0");
   }, [platform, fare, settings.platformCommissions, editRide]);
+
+  // Auto-calculate tips from customerPaid
+  const handleCustomerPaidChange = (val: string) => {
+    setCustomerPaid(val);
+    const paid = Number.parseFloat(val) || 0;
+    if (paid > 0) {
+      const fareNum = Number.parseFloat(fare) || 0;
+      const commNum = Number.parseFloat(commission) || 0;
+      const driverReceives = fareNum - commNum;
+      const calculatedTip = paid - driverReceives;
+      setTips(calculatedTip >= 0 ? String(calculatedTip.toFixed(2)) : "0");
+    }
+  };
 
   const fareNum = Number.parseFloat(fare) || 0;
   const commissionNum = Number.parseFloat(commission) || 0;
@@ -156,6 +167,7 @@ export default function AddRidePage({
       setFare("");
       setCommission("");
       setTips("0");
+      setCustomerPaid("");
       setDistance("");
       setPickupArea("");
       setDropArea("");
@@ -241,39 +253,30 @@ export default function AddRidePage({
           </Button>
         </div>
 
-        {/* Platform selector */}
+        {/* Platform selector — clean dropdown */}
         <div className="mb-4">
           <Label className="text-xs mb-2 block">{t.addRide.platform}</Label>
-          <div className="grid grid-cols-4 gap-2">
-            {PLATFORMS.map((p, idx) => {
-              const isSelected = platform === p;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  data-ocid="addride.platform.toggle"
-                  onClick={() => setPlatform(p)}
-                  className="relative rounded-xl py-2.5 text-xs font-bold transition-all active:scale-95"
-                  style={{
-                    background: isSelected
-                      ? PLATFORM_COLORS[p]
-                      : "oklch(var(--muted))",
-                    color: isSelected
-                      ? "white"
-                      : "oklch(var(--muted-foreground))",
-                    boxShadow: isSelected
-                      ? `0 2px 8px ${PLATFORM_COLORS[p]}55`
-                      : undefined,
-                  }}
-                >
-                  <span className="opacity-50 text-[9px] absolute top-1 left-1.5">
-                    {idx + 1}
+          <Select
+            value={platform}
+            onValueChange={(v) => setPlatform(v as Platform)}
+          >
+            <SelectTrigger
+              data-ocid="addride.platform.select"
+              className="h-12 text-base rounded-xl"
+            >
+              <SelectValue placeholder="Select Platform" />
+            </SelectTrigger>
+            <SelectContent>
+              {PLATFORMS.map((p, idx) => (
+                <SelectItem key={p} value={p}>
+                  <span className="text-muted-foreground text-xs mr-1.5">
+                    {idx + 1}.
                   </span>
                   {p}
-                </button>
-              );
-            })}
-          </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Net Income Banner */}
@@ -298,6 +301,7 @@ export default function AddRidePage({
 
         {/* Form Fields */}
         <div className="space-y-3">
+          {/* Fare + Commission + Tips row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">{t.addRide.fare}</Label>
@@ -333,6 +337,24 @@ export default function AddRidePage({
                 className="mt-1 h-12 text-base"
               />
             </div>
+          </div>
+
+          {/* Customer Paid — auto-calculates tips */}
+          <div>
+            <Label className="text-xs">Customer Paid (₹)</Label>
+            <Input
+              data-ocid="addride.customerpaid.input"
+              type="number"
+              placeholder="e.g. 110"
+              value={customerPaid}
+              onChange={(e) => handleCustomerPaidChange(e.target.value)}
+              className="mt-1 h-12 text-base"
+            />
+            {customerPaid && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Tips auto-calculated: {formatAmount(tipsNum)}
+              </p>
+            )}
           </div>
 
           <div>
