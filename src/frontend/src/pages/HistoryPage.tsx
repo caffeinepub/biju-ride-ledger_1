@@ -190,7 +190,9 @@ export default function HistoryPage({
             >
               <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
                 <div>
-                  <p className="text-xs text-muted-foreground">Platform</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t.history.platform}
+                  </p>
                   <Select
                     value={filterPlatform}
                     onValueChange={setFilterPlatform}
@@ -202,7 +204,9 @@ export default function HistoryPage({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
+                      <SelectItem value="all">
+                        {t.history.allPlatforms}
+                      </SelectItem>
                       {PLATFORMS.map((p) => (
                         <SelectItem key={p} value={p}>
                           {p}
@@ -213,7 +217,9 @@ export default function HistoryPage({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-xs text-muted-foreground">From</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.history.from}
+                    </p>
                     <Input
                       type="date"
                       value={filterDateFrom}
@@ -222,7 +228,9 @@ export default function HistoryPage({
                     />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">To</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.history.to}
+                    </p>
                     <Input
                       type="date"
                       value={filterDateTo}
@@ -233,7 +241,9 @@ export default function HistoryPage({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-xs text-muted-foreground">Min Fare</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.history.minFare}
+                    </p>
                     <Input
                       type="number"
                       placeholder="0"
@@ -243,7 +253,9 @@ export default function HistoryPage({
                     />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Max Fare</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.history.maxFare}
+                    </p>
                     <Input
                       type="number"
                       placeholder="9999"
@@ -260,10 +272,13 @@ export default function HistoryPage({
 
         {/* Stats bar */}
         <div className="flex gap-3 text-xs text-muted-foreground">
-          <span>{filtered.length} rides</span>
+          <span>
+            {filtered.length} {t.history.ridesCount}
+          </span>
           <span>•</span>
           <span>
-            Total: {formatAmount(filtered.reduce((s, r) => s + r.netIncome, 0))}
+            {t.history.total}{" "}
+            {formatAmount(filtered.reduce((s, r) => s + r.netIncome, 0))}
           </span>
         </div>
 
@@ -317,12 +332,12 @@ export default function HistoryPage({
                       <div className="flex flex-wrap gap-1.5 mb-1.5">
                         {isOffDayDate && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-                            🛌 Off Day
+                            🛌 {t.shift.offDay}
                           </span>
                         )}
                         {personalRunEntry && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            🚗 Personal Run {personalRunEntry.km}km
+                            🚗 {t.shift.personalRun} {personalRunEntry.km}km
                           </span>
                         )}
                         {/* BUG 3 FIX: unified shift KM badge covering both old odometerSessions and new shifts */}
@@ -341,7 +356,7 @@ export default function HistoryPage({
                           if (isActive && startKm) {
                             return (
                               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                ⚡ Shift Active (Start: {startKm} km)
+                                ⚡ {t.shift.shiftActive} (Start: {startKm} km)
                               </span>
                             );
                           }
@@ -353,22 +368,22 @@ export default function HistoryPage({
                     {/* Stats pills */}
                     <div className="flex flex-wrap gap-1.5">
                       <DayStat
-                        label="Rides"
+                        label={t.history.rides}
                         value={String(dayRides.length)}
                         variant="blue"
                       />
                       <DayStat
-                        label="Ride KM"
+                        label={t.history.rideKM}
                         value={`${rideKm.toFixed(1)} km`}
                         variant="green"
                       />
                       <DayStat
-                        label="Run KM"
+                        label={t.history.runKM}
                         value={runKm !== null ? `${runKm.toFixed(1)} km` : "—"}
                         variant="blue"
                       />
                       <DayStat
-                        label="Blank KM"
+                        label={t.history.blankKM}
                         value={
                           blankKm !== null ? `${blankKm.toFixed(1)} km` : "—"
                         }
@@ -380,7 +395,7 @@ export default function HistoryPage({
                   <div className="space-y-2">
                     {dayRides.length === 0 && (
                       <div className="py-3 px-3 text-xs text-muted-foreground italic">
-                        No rides recorded
+                        {t.history.noRidesRecorded}
                       </div>
                     )}
                     {dayRides.map((ride, idx) => {
@@ -419,7 +434,7 @@ export default function HistoryPage({
                                 {formatAmount(ride.netIncome)}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Fare: {formatAmount(ride.fare)}
+                                {t.history.fare} {formatAmount(ride.fare)}
                               </p>
                             </div>
                           </div>
@@ -437,11 +452,12 @@ export default function HistoryPage({
                             </Badge>
                             {ride.commission > 0 && (
                               <span className="text-xs text-muted-foreground">
-                                Comm: {formatAmount(ride.commission)}
+                                {t.history.comm} {formatAmount(ride.commission)}
                               </span>
                             )}
                             <span className="text-xs text-muted-foreground">
-                              Tips: ₹{(ride.tips ?? 0).toFixed(0)}
+                              {t.history.tips}
+                              {(ride.tips ?? 0).toFixed(0)}
                             </span>
                           </div>
 
@@ -456,7 +472,7 @@ export default function HistoryPage({
                               }}
                               className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/60"
                             >
-                              ✏️ Edit
+                              {t.history.editRide}
                             </button>
                             <button
                               type="button"
@@ -467,7 +483,7 @@ export default function HistoryPage({
                               }}
                               className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50"
                             >
-                              🗑️ Delete
+                              {t.history.deleteRide}
                             </button>
                           </div>
                         </motion.div>
@@ -495,9 +511,9 @@ export default function HistoryPage({
       >
         <AlertDialogContent data-ocid="history.ride.delete_dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Ride?</AlertDialogTitle>
+            <AlertDialogTitle>{t.history.deleteTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this ride? This cannot be undone.
+              {t.history.deleteDesc}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -505,7 +521,7 @@ export default function HistoryPage({
               data-ocid="history.delete.cancel_button"
               onClick={() => setPendingDeleteId(null)}
             >
-              Cancel
+              {t.home.cancelBtn}
             </AlertDialogCancel>
             <AlertDialogAction
               data-ocid="history.delete.confirm_button"
@@ -517,7 +533,7 @@ export default function HistoryPage({
               }}
               style={{ background: "oklch(0.52 0.22 27)", color: "white" }}
             >
-              Delete
+              {t.home.deleteBtn}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

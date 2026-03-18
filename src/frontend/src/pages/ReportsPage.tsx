@@ -536,44 +536,44 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <SummaryTile
-            label="Income"
+            label={t.reports.income}
             value={formatAmount(income)}
             color="oklch(0.72 0.19 47)"
             bg="oklch(0.72 0.19 47 / 0.12)"
           />
           <SummaryTile
-            label="Rides"
+            label={t.reports.rides}
             value={String(ridesCount)}
             color="oklch(0.58 0.21 264)"
             bg="oklch(0.58 0.21 264 / 0.12)"
           />
           <SummaryTile
-            label="Fuel Cost"
+            label={t.reports.fuelCost}
             value={formatAmount(fuel)}
             color="oklch(0.62 0.22 27)"
             bg="oklch(0.62 0.22 27 / 0.12)"
           />
           <SummaryTile
-            label="Run KM"
+            label={t.reports.runKM}
             value={`${runKm.toFixed(1)} km`}
             color="oklch(0.65 0.15 142)"
             bg="oklch(0.65 0.15 142 / 0.12)"
           />
           <SummaryTile
-            label="Blank KM"
+            label={t.reports.blankKM}
             value={`${blankKm.toFixed(1)} km`}
             color="oklch(0.55 0.12 264)"
             bg="oklch(0.55 0.12 264 / 0.10)"
           />
           <SummaryTile
-            label="Net Profit"
+            label={t.reports.netProfit}
             value={formatAmount(profit)}
             color="oklch(0.65 0.15 142)"
             bg="oklch(0.65 0.15 142 / 0.15)"
           />
           {profitPerRide !== undefined && (
             <SummaryTile
-              label="Profit/Ride"
+              label={t.reports.profitPerRide}
               value={formatAmount(profitPerRide)}
               color="oklch(0.72 0.19 47)"
               bg="oklch(0.72 0.19 47 / 0.10)"
@@ -581,7 +581,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
           )}
           {profitPerKm !== undefined && (
             <SummaryTile
-              label="Profit/KM"
+              label={t.reports.profitPerKM}
               value={formatAmount(profitPerKm)}
               color="oklch(0.65 0.15 142)"
               bg="oklch(0.65 0.15 142 / 0.10)"
@@ -602,7 +602,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                   className="text-[10px] font-semibold uppercase tracking-wider"
                   style={{ color: "oklch(0.72 0.19 47)" }}
                 >
-                  Best Platform
+                  {t.reports.bestPlatform}
                 </p>
                 <p className="text-xs font-bold mt-0.5">{bestPlatform}</p>
               </div>
@@ -619,7 +619,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                   className="text-[10px] font-semibold uppercase tracking-wider"
                   style={{ color: "oklch(0.58 0.21 264)" }}
                 >
-                  Best Area
+                  {t.reports.bestArea}
                 </p>
                 <p className="text-xs font-bold mt-0.5">{bestArea}</p>
               </div>
@@ -838,7 +838,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               ))
             ) : (
               <p className="text-sm text-muted-foreground">
-                Add more rides to get smart insights.
+                {t.reports.addMoreRides}
               </p>
             )}
           </div>
@@ -872,7 +872,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                 htmlFor="export-month-select"
                 className="text-xs text-muted-foreground font-medium whitespace-nowrap"
               >
-                Export period:
+                {t.reports.exportPeriod}
               </label>
               <select
                 id="export-month-select"
@@ -901,7 +901,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                     className="gap-2 rounded-xl"
                   >
                     <Download size={15} />
-                    Export
+                    {t.reports.export}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -938,7 +938,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               }}
             >
               <span className="animate-spin text-base">⟳</span>
-              Preparing report...
+              {t.reports.preparing}
             </div>
           )}
 
@@ -952,7 +952,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                   color: "oklch(0.42 0.14 142)",
                 }}
               >
-                ✓ Download complete
+                {t.reports.downloadComplete}
               </div>
               <div className="flex gap-2">
                 <Button
@@ -969,7 +969,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                       );
                   }}
                 >
-                  <Download size={13} /> Download Again
+                  <Download size={13} /> {t.reports.downloadAgain}
                 </Button>
                 <Button
                   data-ocid="reports.share.button"
@@ -978,7 +978,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                   className="flex-1 rounded-xl"
                   onClick={handleShare}
                 >
-                  📤 Share
+                  📤 {t.reports.share}
                 </Button>
                 <Button
                   data-ocid="reports.export.secondary_button"
@@ -987,7 +987,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
                   className="rounded-xl text-xs"
                   onClick={() => setExportStatus("idle")}
                 >
-                  New Export
+                  {t.reports.newExport}
                 </Button>
               </div>
             </div>
@@ -1001,7 +1001,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               value="today"
               className="flex-1"
             >
-              Today
+              {t.reports.today}
             </TabsTrigger>
             <TabsTrigger
               data-ocid="reports.week.tab"
@@ -1022,7 +1022,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
               value="daily"
               className="flex-1"
             >
-              Daily
+              {t.reports.daily}
             </TabsTrigger>
           </TabsList>
 
@@ -1030,7 +1030,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
           <TabsContent value="today" className="space-y-4 mt-4">
             <div className="rounded-2xl bg-card border border-border p-4">
               <h3 className="font-display font-semibold mb-3">
-                Today — {formatISTDate(today)}
+                {t.reports.todayReport} — {formatISTDate(today)}
               </h3>
               {(() => {
                 const todayProfit = todayIncome - todayFuelCost;
@@ -1144,7 +1144,9 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
           <TabsContent value="daily" className="space-y-4 mt-4">
             <div className="rounded-2xl bg-card border border-border p-4">
               <div className="flex items-center gap-3 mb-3">
-                <h3 className="font-display font-semibold">Daily Report</h3>
+                <h3 className="font-display font-semibold">
+                  {t.reports.dailyReport}
+                </h3>
               </div>
               <input
                 type="date"
@@ -1192,7 +1194,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
         {odometerSessions.length > 0 && (
           <div className="rounded-2xl bg-card border border-border p-4">
             <h3 className="font-display font-semibold text-sm mb-3">
-              Run KM History
+              {t.reports.runKMHistory}
             </h3>
             <div className="space-y-2">
               {[...odometerSessions]
@@ -1229,7 +1231,7 @@ export default function ReportsPage({ onAvatarClick }: ReportsPageProps) {
         {fuelHistory.length > 0 && (
           <div className="rounded-2xl bg-card border border-border p-4">
             <h3 className="font-display font-semibold text-sm mb-3">
-              Fuel History
+              {t.reports.fuelHistory}
             </h3>
             <div className="space-y-2">
               {[...fuelHistory]

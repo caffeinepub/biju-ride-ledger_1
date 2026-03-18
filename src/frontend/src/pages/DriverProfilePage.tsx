@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { getTranslations } from "../i18n";
 import { useStore } from "../store/useStore";
 
 interface DriverProfilePageProps {
@@ -21,12 +22,13 @@ interface DriverProfilePageProps {
 
 export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
   const { settings, updateSettings } = useStore();
+  const t = getTranslations(settings.language);
+  const pt = t.profile;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Local edit state
   const [editName, setEditName] = useState(settings.driverName || "");
   const [editVehicle, setEditVehicle] = useState(
     settings.vehicleType || "Bike",
@@ -75,7 +77,6 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
     toast.success("Profile saved!");
   };
 
-  // ─── Stats computed from localStorage ───
   const allRides = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("biju_rides") || "[]");
@@ -147,32 +148,20 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
 
   const achievementBadge =
     totalRides >= 500
-      ? "🏆 500 Rides Legend"
+      ? `🏆 500 ${settings.language === "bn" ? "রাইড লেজেন্ড" : settings.language === "hi" ? "राइड लীजेंड" : "Rides Legend"}`
       : totalRides >= 100
-        ? "⭐ 100 Rides Pro"
+        ? `⭐ 100 ${settings.language === "bn" ? "রাইড প্রো" : settings.language === "hi" ? "राइड प्रो" : "Rides Pro"}`
         : totalRides >= 50
-          ? "🥈 50 Rides Star"
+          ? `🥈 50 ${settings.language === "bn" ? "রাইড স্টার" : settings.language === "hi" ? "राइड स्टार" : "Rides Star"}`
           : totalRides >= 10
-            ? "🥉 10 Rides Starter"
-            : "🚗 New Driver";
+            ? `🥉 10 ${settings.language === "bn" ? "রাইড স্টার্টার" : settings.language === "hi" ? "राइड स्टार्टर" : "Rides Starter"}`
+            : pt.newDriver;
 
-  const motivations = [
-    "Every kilometer brings you closer to your goal. Keep driving!",
-    "Your consistency today builds tomorrow's success.",
-    "Hard work on the road pays off. You're doing great!",
-    "Each ride is a step forward. Stay focused!",
-    "The best drivers aren't born — they're built ride by ride.",
-    "Your dedication inspires others. Keep going!",
-    "Small progress every day adds up to big results.",
-    "Proud of your hustle. Today is another winning day!",
-    "Stay safe, stay focused, and earn well today!",
-    "Your road to financial freedom is one ride at a time.",
-  ];
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) /
       86400000,
   );
-  const todayMotivation = motivations[dayOfYear % motivations.length];
+  const todayMotivation = t.motivations[dayOfYear % t.motivations.length];
 
   const [drivingSince, setDrivingSince] = useState(() => {
     try {
@@ -221,7 +210,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-[15px] font-bold font-display leading-tight tracking-tight text-white">
-            Driver Profile
+            {pt.title}
           </h1>
         </div>
         {!isEditing ? (
@@ -235,7 +224,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
             }}
           >
             <Edit2 size={12} />
-            Edit
+            {pt.edit}
           </button>
         ) : (
           <button
@@ -249,55 +238,44 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
         )}
       </header>
 
-      {/* Photo options overlay */}
+      {/* Photo options overlay — solid background, theme-aware */}
       {showPhotoOptions && (
         <div
           className="fixed inset-0 z-50 flex flex-col justify-end"
-          style={{ background: "rgba(0,0,0,0.6)" }}
+          style={{ background: "rgba(0,0,0,0.7)" }}
           onClick={() => setShowPhotoOptions(false)}
           onKeyDown={(e) => e.key === "Escape" && setShowPhotoOptions(false)}
           aria-label="Close photo options"
           tabIndex={-1}
         >
           <div
-            className="rounded-t-2xl p-5 space-y-3 safe-bottom"
-            style={{ background: "var(--background, white)" }}
+            className="rounded-t-2xl p-5 space-y-3 safe-bottom bg-white dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Change Profile Photo
+            <p className="text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
+              {pt.changePhoto}
             </p>
             <button
               type="button"
-              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
-              style={{
-                background: "oklch(0.58 0.21 264 / 0.12)",
-                color: "oklch(0.45 0.18 264)",
-              }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200"
               onClick={() => cameraInputRef.current?.click()}
             >
-              <span className="text-xl">📷</span>
-              Take Photo (Camera)
+              {pt.takePhoto}
             </button>
             <button
               type="button"
-              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
-              style={{
-                background: "oklch(0.72 0.19 47 / 0.12)",
-                color: "oklch(0.50 0.16 47)",
-              }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-200"
               onClick={() => fileInputRef.current?.click()}
             >
-              <span className="text-xl">🖼️</span>
-              Choose from Gallery
+              {pt.chooseGallery}
             </button>
             <button
               type="button"
-              className="w-full py-3 rounded-xl text-sm font-medium text-muted-foreground transition-all active:scale-[0.98] border border-border"
+              className="w-full py-3 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 transition-all active:scale-[0.98] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
               onClick={() => setShowPhotoOptions(false)}
             >
-              Cancel
+              {t.common.cancel}
             </button>
           </div>
         </div>
@@ -352,10 +330,10 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
           </div>
           <div className="text-center">
             <p className="text-xl font-bold font-display text-foreground">
-              {settings.driverName || "Driver"}
+              {settings.driverName || pt.newDriver}
             </p>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {settings.vehicleType} · {settings.city || "City not set"}
+              {settings.vehicleType} · {settings.city || pt.notSet}
             </p>
           </div>
         </div>
@@ -363,27 +341,26 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
         {/* Profile info / edit section */}
         <div className="rounded-2xl bg-card border border-border overflow-hidden">
           {!isEditing ? (
-            /* Read-only rows */
             <>
               {[
                 {
                   icon: User,
-                  label: "Name",
-                  value: settings.driverName || "Not set",
+                  label: pt.name,
+                  value: settings.driverName || pt.notSet,
                 },
                 {
                   icon: Truck,
-                  label: "Vehicle Type",
-                  value: settings.vehicleType || "Not set",
+                  label: pt.vehicleType,
+                  value: settings.vehicleType || pt.notSet,
                 },
                 {
                   icon: MapPin,
-                  label: "City",
-                  value: settings.city || "Not set",
+                  label: pt.city,
+                  value: settings.city || pt.notSet,
                 },
                 {
                   icon: Target,
-                  label: "Daily Target",
+                  label: pt.dailyTarget,
                   value: `₹${settings.dailyTarget.toLocaleString()}`,
                 },
               ].map((row, idx, arr) => {
@@ -422,29 +399,28 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
               })}
             </>
           ) : (
-            /* Editable fields */
             <div className="p-4 space-y-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Edit Profile
+                {pt.editProfile}
               </p>
 
               <div>
                 <label className={labelClass} htmlFor="edit-name">
-                  Name
+                  {pt.name}
                 </label>
                 <input
                   id="edit-name"
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder={pt.name}
                   className={inputClass}
                 />
               </div>
 
               <div>
                 <label className={labelClass} htmlFor="edit-vehicle">
-                  Vehicle Type
+                  {pt.vehicleType}
                 </label>
                 <select
                   id="edit-vehicle"
@@ -462,21 +438,21 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
 
               <div>
                 <label className={labelClass} htmlFor="edit-city">
-                  City
+                  {pt.city}
                 </label>
                 <input
                   id="edit-city"
                   type="text"
                   value={editCity}
                   onChange={(e) => setEditCity(e.target.value)}
-                  placeholder="Your city"
+                  placeholder={pt.city}
                   className={inputClass}
                 />
               </div>
 
               <div>
                 <label className={labelClass} htmlFor="edit-target">
-                  Daily Target (₹)
+                  {pt.dailyTarget}
                 </label>
                 <input
                   id="edit-target"
@@ -496,7 +472,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
                   className="flex-1"
                   onClick={() => setIsEditing(false)}
                 >
-                  Cancel
+                  {t.common.cancel}
                 </Button>
                 <Button
                   type="button"
@@ -509,7 +485,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
                   data-ocid="profile.save_button"
                 >
                   <Save size={16} />
-                  Save Changes
+                  {pt.saveChanges}
                 </Button>
               </div>
             </div>
@@ -519,7 +495,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
         {/* Stats Section */}
         <div className="rounded-2xl bg-card border border-border p-4 space-y-4">
           <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
-            Your Stats
+            {pt.yourStats}
           </h3>
 
           <div className="grid grid-cols-2 gap-3">
@@ -527,14 +503,16 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {totalRides}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Total Rides</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {pt.totalRides}
+              </p>
             </div>
             <div className="rounded-xl bg-green-50 dark:bg-green-950/30 p-3 text-center">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {totalKM.toFixed(0)} km
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Total KM Driven
+                {pt.totalKmDriven}
               </p>
             </div>
             <div className="rounded-xl bg-orange-50 dark:bg-orange-950/30 p-3 text-center">
@@ -542,14 +520,16 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
                 ₹{bestDayEarnings.toFixed(0)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Best Day Earnings
+                {pt.bestDayEarnings}
               </p>
             </div>
             <div className="rounded-xl bg-purple-50 dark:bg-purple-950/30 p-3 text-center">
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {streak} 🔥
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Day Streak</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {pt.dayStreak}
+              </p>
             </div>
           </div>
 
@@ -558,7 +538,9 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
             <p className="text-lg font-bold text-yellow-700 dark:text-yellow-400">
               {achievementBadge}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Achievement</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {pt.achievement}
+            </p>
           </div>
 
           {/* Driving Since */}
@@ -567,7 +549,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
               htmlFor="driving-since"
               className="text-xs font-medium text-muted-foreground block mb-1"
             >
-              Driving Since (Year)
+              {pt.drivingSince}
             </label>
             <input
               type="number"
@@ -575,7 +557,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
               max={new Date().getFullYear()}
               value={drivingSince}
               onChange={(e) => saveDrivingSince(e.target.value)}
-              placeholder="e.g. 2020"
+              placeholder={pt.drivingSincePlaceholder}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-foreground"
               id="driving-since"
               data-ocid="profile.driving_since.input"
@@ -592,7 +574,7 @@ export default function DriverProfilePage({ onBack }: DriverProfilePageProps) {
           }}
         >
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Today's Motivation
+            {pt.todayMotivation}
           </p>
           <p className="text-sm font-medium leading-relaxed text-blue-800 dark:text-blue-100 motivation-text">
             {todayMotivation}

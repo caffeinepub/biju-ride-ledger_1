@@ -17,6 +17,7 @@ import {
 import { Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getTranslations } from "../i18n";
 import {
   PLATFORMS,
   type Platform,
@@ -31,6 +32,9 @@ interface QuickRideModalProps {
 
 export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
   const { addRide, settings, formatAmount } = useStore();
+  const t = getTranslations(settings.language);
+  const tq = t.quickRide;
+
   const [platform, setPlatform] = useState<Platform>("Uber");
   const [fare, setFare] = useState("");
   const [rideKm, setRideKm] = useState("");
@@ -57,7 +61,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
 
   const handleSave = () => {
     if (!fare || fareNum <= 0) {
-      toast.error("Please enter a valid fare");
+      toast.error(tq.toastError);
       return;
     }
     addRide({
@@ -72,7 +76,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
       netIncome,
       paymentType,
     });
-    toast.success("Ride saved!");
+    toast.success(tq.toastSuccess);
     setPlatform("Uber");
     setFare("");
     setRideKm("");
@@ -93,7 +97,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
           <div className="flex items-center gap-2">
             <Zap size={18} style={{ color: "oklch(0.72 0.19 47)" }} />
             <DialogTitle className="font-display font-bold">
-              Quick Ride
+              {tq.title}
             </DialogTitle>
           </div>
         </DialogHeader>
@@ -101,7 +105,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
         <div className="space-y-3 mt-2">
           {/* Platform */}
           <div>
-            <Label className="text-xs mb-1 block">Platform</Label>
+            <Label className="text-xs mb-1 block">{tq.platform}</Label>
             <Select
               value={platform}
               onValueChange={(v) => setPlatform(v as Platform)}
@@ -128,7 +132,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
           {/* Fare + KM */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs mb-1 block">Fare (₹)</Label>
+              <Label className="text-xs mb-1 block">{tq.fare}</Label>
               <Input
                 data-ocid="quick_ride.fare.input"
                 type="number"
@@ -139,7 +143,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">Ride KM</Label>
+              <Label className="text-xs mb-1 block">{tq.rideKM}</Label>
               <Input
                 data-ocid="quick_ride.km.input"
                 type="number"
@@ -153,7 +157,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
 
           {/* Payment Type */}
           <div>
-            <Label className="text-xs mb-1 block">Payment Type</Label>
+            <Label className="text-xs mb-1 block">{tq.paymentType}</Label>
             <div className="flex gap-2">
               {(["cash_upi", "app_online"] as const).map((pt) => (
                 <button
@@ -173,7 +177,9 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
                         : "oklch(var(--muted-foreground))",
                   }}
                 >
-                  {pt === "cash_upi" ? "💵 Cash / UPI" : "📱 App Online"}
+                  {pt === "cash_upi"
+                    ? `💵 ${tq.cashUPI}`
+                    : `📱 ${tq.appOnline}`}
                 </button>
               ))}
             </div>
@@ -182,7 +188,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
           {/* Tip + Area */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs mb-1 block">Tip (optional)</Label>
+              <Label className="text-xs mb-1 block">{tq.tipOptional}</Label>
               <Input
                 data-ocid="quick_ride.tip.input"
                 type="number"
@@ -193,7 +199,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">Area (optional)</Label>
+              <Label className="text-xs mb-1 block">{tq.areaOptional}</Label>
               <Input
                 data-ocid="quick_ride.area.input"
                 type="text"
@@ -213,7 +219,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
               border: "1px solid oklch(0.58 0.16 142 / 0.25)",
             }}
           >
-            <p className="text-xs text-muted-foreground">Net Income</p>
+            <p className="text-xs text-muted-foreground">{tq.netIncome}</p>
             <p
               className="text-xl font-bold"
               style={{ color: "oklch(0.48 0.16 142)" }}
@@ -229,7 +235,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
               className="flex-1 h-11 rounded-xl"
               onClick={onClose}
             >
-              Cancel
+              {tq.cancel}
             </Button>
             <Button
               data-ocid="quick_ride.submit_button"
@@ -240,7 +246,7 @@ export default function QuickRideModal({ open, onClose }: QuickRideModalProps) {
               }}
               onClick={handleSave}
             >
-              Save Ride
+              {tq.saveRide}
             </Button>
           </div>
         </div>

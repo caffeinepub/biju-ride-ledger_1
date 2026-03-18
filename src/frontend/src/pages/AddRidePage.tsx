@@ -223,11 +223,11 @@ export default function AddRidePage({
   const commitSave = (rideData: Omit<Ride, "id">) => {
     if (editRide) {
       updateRide(editRide.id, rideData);
-      toast.success("Ride updated!");
+      toast.success(t.addRide.updateRide);
       playSuccess();
     } else {
       addRide(rideData);
-      toast.success("Ride saved!");
+      toast.success(t.addRide.saveRide);
       playSuccess();
 
       // Check if daily target crossed for first time today
@@ -266,7 +266,7 @@ export default function AddRidePage({
 
   const handleSave = () => {
     if (!fare || fareNum <= 0) {
-      toast.error("Please enter a valid fare");
+      toast.error(t.quickRide.toastError);
       return;
     }
     const rideData = buildRideData();
@@ -361,7 +361,7 @@ export default function AddRidePage({
           onClick={() => setQuickRideOpen(true)}
         >
           <Zap size={18} />
-          QUICK RIDE
+          {t.addRide.quickRideBtn}
         </Button>
         {/* Voice Button */}
         <div className="flex justify-end mb-3">
@@ -384,7 +384,7 @@ export default function AddRidePage({
             }}
           >
             {listening ? <MicOff size={15} /> : <Mic size={15} />}
-            {listening ? "Stop" : "Voice"}
+            {listening ? t.addRide.stop : t.addRide.voice}
           </Button>
         </div>
 
@@ -416,7 +416,7 @@ export default function AddRidePage({
 
         {/* Payment Type Toggle */}
         <div className="mb-4">
-          <Label className="text-xs mb-2 block">Payment Type</Label>
+          <Label className="text-xs mb-2 block">{t.addRide.paymentType}</Label>
           <div className="flex gap-2">
             <button
               type="button"
@@ -437,7 +437,7 @@ export default function AddRidePage({
                     : "oklch(var(--muted-foreground))",
               }}
             >
-              💵 Cash / UPI
+              💵 {t.addRide.cashUPI}
             </button>
             <button
               type="button"
@@ -458,7 +458,7 @@ export default function AddRidePage({
                     : "oklch(var(--muted-foreground))",
               }}
             >
-              📱 App Online
+              📱 {t.addRide.appOnline}
             </button>
           </div>
         </div>
@@ -533,7 +533,7 @@ export default function AddRidePage({
           {/* Customer Paid — visible for Cash/UPI only */}
           {paymentType === "cash_upi" && (
             <div>
-              <Label className="text-xs">Customer Paid (₹)</Label>
+              <Label className="text-xs">{t.addRide.customerPaid}</Label>
               <Input
                 data-ocid="addride.customerpaid.input"
                 type="number"
@@ -545,7 +545,7 @@ export default function AddRidePage({
               <p className="text-xs text-muted-foreground mt-1">
                 {customerPaidNum > 0
                   ? `Tip: ${formatAmount(tipsNum)} · Net: ${formatAmount(netIncome)}`
-                  : "Enter amount customer handed you"}
+                  : t.addRide.customerPaidHelper}
               </p>
             </div>
           )}
@@ -629,7 +629,7 @@ export default function AddRidePage({
           {/* Ride Date and Time — split fields */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs block mb-1">Ride Date</Label>
+              <Label className="text-xs block mb-1">{t.addRide.rideDate}</Label>
               <Input
                 data-ocid="addride.ridedate.input"
                 type="date"
@@ -639,7 +639,7 @@ export default function AddRidePage({
               />
             </div>
             <div>
-              <Label className="text-xs block mb-1">Ride Time (optional)</Label>
+              <Label className="text-xs block mb-1">{t.addRide.rideTime}</Label>
               <Input
                 data-ocid="addride.ridetime.input"
                 type="time"
@@ -662,7 +662,7 @@ export default function AddRidePage({
           onClick={handleSave}
         >
           <Save size={20} />
-          {editRide ? "Update Ride" : t.addRide.saveRide}
+          {editRide ? t.addRide.updateRide : t.addRide.saveRide}
         </Button>
         <QuickRideModal
           open={quickRideOpen}
@@ -673,10 +673,9 @@ export default function AddRidePage({
         <AlertDialog open={showKmWarning} onOpenChange={setShowKmWarning}>
           <AlertDialogContent data-ocid="addride.kmwarning.dialog">
             <AlertDialogHeader>
-              <AlertDialogTitle>Ride KM Exceeds Run KM</AlertDialogTitle>
+              <AlertDialogTitle>{t.addRide.kmWarningTitle}</AlertDialogTitle>
               <AlertDialogDescription>
-                Today&apos;s total Ride KM exceeds the Run KM recorded from the
-                odometer. This may indicate unrealistic data. Save anyway?
+                {t.addRide.kmWarningDesc}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -687,7 +686,7 @@ export default function AddRidePage({
                   pendingRideDataRef.current = null;
                 }}
               >
-                Cancel
+                {t.home.cancelBtn}
               </AlertDialogCancel>
               <AlertDialogAction
                 data-ocid="addride.kmwarning.confirm_button"
@@ -706,7 +705,7 @@ export default function AddRidePage({
                   setShowKmWarning(false);
                 }}
               >
-                Save Anyway
+                {t.addRide.saveAnyway}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -719,10 +718,9 @@ export default function AddRidePage({
         >
           <AlertDialogContent data-ocid="addride.duplicate.dialog">
             <AlertDialogHeader>
-              <AlertDialogTitle>Possible Duplicate Ride</AlertDialogTitle>
+              <AlertDialogTitle>{t.addRide.duplicateTitle}</AlertDialogTitle>
               <AlertDialogDescription>
-                A ride with the same fare, distance, platform, and date already
-                exists. Save anyway?
+                {t.addRide.duplicateDesc}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -733,7 +731,7 @@ export default function AddRidePage({
                   pendingRideDataRef.current = null;
                 }}
               >
-                Cancel
+                {t.home.cancelBtn}
               </AlertDialogCancel>
               <AlertDialogAction
                 data-ocid="addride.duplicate.confirm_button"
@@ -745,7 +743,7 @@ export default function AddRidePage({
                   setShowDuplicateDialog(false);
                 }}
               >
-                Save Anyway
+                {t.addRide.saveAnyway}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

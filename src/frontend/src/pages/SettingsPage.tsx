@@ -9,7 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState } from "react";
-import { toast } from "sonner";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
 import {
@@ -33,7 +32,6 @@ export default function SettingsPage({
   const { settings, updateSettings } = useStore();
   const t = getTranslations(settings.language);
 
-  const [dailyTarget, setDailyTarget] = useState(String(settings.dailyTarget));
   const [fuelPrice, setFuelPrice] = useState(
     String(settings.fuelPricePerLitre),
   );
@@ -50,54 +48,34 @@ export default function SettingsPage({
     Platform | ""
   >("");
 
-  const handleSave = () => {
-    updateSettings({
-      dailyTarget: Number.parseFloat(dailyTarget) || 1000,
-      fuelPricePerLitre: Number.parseFloat(fuelPrice) || 105,
-      platformCommissions,
-    });
-    toast.success("Settings saved!");
-  };
-
   const updateCommission = (
     platform: Platform,
     field: "type" | "value",
     val: string,
   ) => {
-    setPlatformCommissions((prev) => ({
-      ...prev,
-      [platform]: {
-        ...prev[platform],
-        [field]: field === "value" ? Number.parseFloat(val) || 0 : val,
-      },
-    }));
+    setPlatformCommissions((prev) => {
+      const updated = {
+        ...prev,
+        [platform]: {
+          ...prev[platform],
+          [field]: field === "value" ? Number.parseFloat(val) || 0 : val,
+        },
+      };
+      updateSettings({ platformCommissions: updated });
+      return updated;
+    });
   };
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
       <Header title={t.settings.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4 space-y-4">
-        {/* Daily Target */}
-        <div className="rounded-2xl bg-card border border-border p-4">
-          <Label className="font-semibold font-display">
-            {t.settings.dailyTarget}
-          </Label>
-          <Input
-            data-ocid="settings.dailytarget.input"
-            type="number"
-            value={dailyTarget}
-            onChange={(e) => setDailyTarget(e.target.value)}
-            className="mt-2 h-12 text-base"
-          />
-        </div>
-
-        {/* Platform Commissions — redesigned with single dropdown panel */}
+        {/* Platform Commissions */}
         <div className="rounded-2xl bg-card border border-border p-4">
           <h3 className="font-display font-semibold mb-3">
             {t.settings.platformCommissions}
           </h3>
 
-          {/* Platform selector */}
           <Select
             value={selectedCommissionPlatform}
             onValueChange={(v) => setSelectedCommissionPlatform(v as Platform)}
@@ -106,7 +84,7 @@ export default function SettingsPage({
               data-ocid="settings.platform.select"
               className="h-11 mb-3"
             >
-              <SelectValue placeholder="Select Platform" />
+              <SelectValue placeholder={t.addRide.platform} />
             </SelectTrigger>
             <SelectContent>
               {PLATFORMS.map((p) => (
@@ -117,7 +95,6 @@ export default function SettingsPage({
             </SelectContent>
           </Select>
 
-          {/* Config panel for selected platform */}
           {selectedCommissionPlatform && (
             <div
               className="rounded-xl p-3 border space-y-3"
@@ -151,11 +128,15 @@ export default function SettingsPage({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No Commission</SelectItem>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                    <SelectItem value="none">
+                      {t.settings.noCommission}
+                    </SelectItem>
+                    <SelectItem value="percentage">
+                      {t.settings.percentage}
+                    </SelectItem>
+                    <SelectItem value="fixed">{t.settings.fixed}</SelectItem>
                     <SelectItem value="daily_fee">
-                      Daily Platform Fee (₹)
+                      {t.settings.dailyFee}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -185,7 +166,6 @@ export default function SettingsPage({
             </div>
           )}
 
-          {/* Quick overview of all saved commissions */}
           <div className="mt-3 space-y-1">
             {PLATFORMS.filter(
               (p) => platformCommissions[p].type !== "none",
@@ -216,7 +196,13 @@ export default function SettingsPage({
             data-ocid="settings.fuelprice.input"
             type="number"
             value={fuelPrice}
-            onChange={(e) => setFuelPrice(e.target.value)}
+            onChange={(e) => {
+              setFuelPrice(e.target.value);
+              const val = Number.parseFloat(e.target.value);
+              if (!Number.isNaN(val) && val > 0) {
+                updateSettings({ fuelPricePerLitre: val });
+              }
+            }}
             className="mt-2 h-12 text-base"
           />
         </div>
@@ -293,11 +279,15 @@ export default function SettingsPage({
 
         {/* App Preferences */}
         <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-3">App Preferences</h3>
+          <h3 className="font-display font-semibold mb-3">
+            {t.settings.appPreferences}
+          </h3>
 
           {/* Theme */}
           <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">App Theme</Label>
+            <Label className="text-sm font-medium mb-2 block">
+              {t.settings.appTheme}
+            </Label>
             <div className="flex gap-2" data-ocid="settings.theme.toggle">
               {(["light", "dark"] as const).map((th) => (
                 <button
@@ -316,7 +306,9 @@ export default function SettingsPage({
                         : "oklch(var(--muted-foreground))",
                   }}
                 >
-                  {th === "light" ? "☀️ Light" : "🌙 Dark"}
+                  {th === "light"
+                    ? t.settings.lightTheme
+                    : t.settings.darkTheme}
                 </button>
               ))}
             </div>
@@ -324,7 +316,9 @@ export default function SettingsPage({
 
           {/* Sound */}
           <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">App Sound</Label>
+            <Label className="text-sm font-medium mb-2 block">
+              {t.settings.appSound}
+            </Label>
             <div className="flex gap-2" data-ocid="settings.sound.toggle">
               {(["on", "off"] as const).map((s) => {
                 const isOn = soundEnabled === (s === "on");
@@ -348,7 +342,7 @@ export default function SettingsPage({
                       color: isOn ? "white" : "oklch(var(--muted-foreground))",
                     }}
                   >
-                    {s === "on" ? "🔊 ON" : "🔇 OFF"}
+                    {s === "on" ? t.settings.soundOn : t.settings.soundOff}
                   </button>
                 );
               })}
@@ -358,9 +352,9 @@ export default function SettingsPage({
           {/* Notifications */}
           <div className="flex items-center justify-between py-2 border-t border-border">
             <div>
-              <p className="font-medium text-sm">In-App Notifications</p>
+              <p className="font-medium text-sm">{t.settings.notifications}</p>
               <p className="text-xs text-muted-foreground">
-                Low earnings, fuel, blank KM alerts
+                {t.settings.notificationsDesc}
               </p>
             </div>
             <button
@@ -371,33 +365,29 @@ export default function SettingsPage({
                 setNotificationsEnabled(newVal);
                 localStorage.setItem("biju_notifications", String(newVal));
               }}
-              className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${notificationsEnabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                notificationsEnabled
+                  ? "bg-green-500"
+                  : "bg-gray-300 dark:bg-gray-600"
+              }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${notificationsEnabled ? "translate-x-6" : ""}`}
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                  notificationsEnabled ? "translate-x-6" : ""
+                }`}
               />
             </button>
           </div>
         </div>
 
-        <Button
-          data-ocid="settings.save.button"
-          className="w-full h-14 rounded-xl text-base font-bold text-white"
-          style={{
-            background:
-              "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
-          }}
-          onClick={handleSave}
-        >
-          {t.settings.save}
-        </Button>
-
         {/* About Section */}
         <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-2">About</h3>
+          <h3 className="font-display font-semibold mb-2">
+            {t.settings.about}
+          </h3>
           <p className="text-sm font-semibold">Biju's RideBook v5.0</p>
           <p className="text-xs text-muted-foreground">
-            Smart Earnings Tracker for Ride Drivers
+            {t.settings.appVersion}
           </p>
         </div>
 

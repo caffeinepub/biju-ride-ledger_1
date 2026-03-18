@@ -19,7 +19,6 @@ import FuelHistoryModal from "../components/FuelHistoryModal";
 import Header from "../components/Header";
 import ShiftSummaryModal from "../components/ShiftSummaryModal";
 import { getTranslations } from "../i18n";
-import { getSmartRecommendations } from "../store/analytics";
 import { calcBlankKm, calcRideKm, calcRunKm } from "../store/kmUtils";
 import { useSyncManager } from "../store/syncManager";
 import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
@@ -144,17 +143,19 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
   const { syncStatus } = useSyncManager(rides, fuelEntries, odometerSessions);
 
   // BUG 7 FIX: dynamic greeting based on time of day and driver name
-  const greeting = useMemo(() => {
+  const greeting = (() => {
     const hour = new Date().getHours();
     const timeGreeting =
-      hour < 12
-        ? "Good Morning"
-        : hour < 17
-          ? "Good Afternoon"
-          : "Good Evening";
+      hour < 5 || hour >= 21
+        ? t.greeting.night
+        : hour < 12
+          ? t.greeting.morning
+          : hour < 17
+            ? t.greeting.afternoon
+            : t.greeting.evening;
     const name = settings.driverName || "Driver";
-    return `Hello ${name}, ${timeGreeting}`;
-  }, [settings.driverName]);
+    return `${t.greeting.hello} ${name}, ${timeGreeting}`;
+  })();
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -211,11 +212,6 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
       ? Math.min(100, (totalIncome / settings.dailyTarget) * 100)
       : 0;
   const isGoodDay = totalIncome >= settings.dailyTarget;
-
-  const recommendations = useMemo(
-    () => getSmartRecommendations(rides),
-    [rides],
-  );
 
   // ─── Weekly Performance ───
   const weeklyData = useMemo(() => {
@@ -347,7 +343,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     startShift(km, selectedControlDate);
     setShowStartShiftPanel(false);
     setShiftStartKm("");
-    toast.success("Shift started!", {
+    toast.success(t.shift.shiftStarted, {
       style: {
         background: "oklch(0.20 0.04 75)",
         color: "oklch(0.98 0.05 80)",
@@ -378,7 +374,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     addPersonalRun(selectedControlDate, km);
     setShowPersonalRunPanel(false);
     setPersonalRunKm("");
-    toast.success("Personal run recorded");
+    toast.success(t.shift.shiftUpdated);
   };
 
   const handleUpdateShift = () => {
@@ -397,7 +393,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     // BUG 6 FIX: reset edit fields after save
     setEditStartKm("");
     setEditEndKm("");
-    toast.success("Shift updated");
+    toast.success(t.shift.shiftUpdated);
   };
 
   const handleSyncClick = () => {
@@ -542,46 +538,46 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 isSyncing ? "animate-pulse" : ""
               }`}
               style={{
-                background: isSyncing
-                  ? "oklch(0.52 0.21 264 / 0.15)"
-                  : syncStatus === "synced"
-                    ? isDark
-                      ? "#22C55E"
-                      : "oklch(0.58 0.16 142 / 0.15)"
-                    : syncStatus === "offline"
-                      ? "oklch(0.72 0.18 75 / 0.20)"
-                      : "oklch(0.52 0.21 264 / 0.15)",
-                color: isSyncing
-                  ? "oklch(0.42 0.18 264)"
-                  : syncStatus === "synced"
-                    ? isDark
-                      ? "white"
-                      : "oklch(0.42 0.14 142)"
-                    : syncStatus === "offline"
-                      ? "oklch(0.50 0.16 75)"
-                      : "oklch(0.42 0.18 264)",
+                background:
+                  isSyncing || syncStatus === "syncing"
+                    ? "#22C55E"
+                    : syncStatus === "synced"
+                      ? isDark
+                        ? "#22C55E"
+                        : "oklch(0.58 0.16 142 / 0.15)"
+                      : syncStatus === "offline"
+                        ? "oklch(0.72 0.18 75 / 0.20)"
+                        : "oklch(0.58 0.16 142 / 0.15)",
+                color:
+                  isSyncing || syncStatus === "syncing"
+                    ? "white"
+                    : syncStatus === "synced"
+                      ? isDark
+                        ? "white"
+                        : "oklch(0.42 0.14 142)"
+                      : syncStatus === "offline"
+                        ? "oklch(0.50 0.16 75)"
+                        : "oklch(0.42 0.14 142)",
                 boxShadow:
-                  syncStatus === "synced" && isDark
-                    ? "0 0 8px rgba(34, 197, 94, 0.4)"
+                  isSyncing || syncStatus === "synced"
+                    ? "0 0 8px rgba(34, 197, 94, 0.5)"
                     : "none",
               }}
             >
-              {isSyncing ? (
+              {isSyncing || syncStatus === "syncing" ? (
                 <RefreshCw size={10} className="animate-spin" />
               ) : syncStatus === "synced" ? (
                 <Cloud size={10} />
-              ) : syncStatus === "syncing" ? (
-                <CloudUpload size={10} className="animate-pulse" />
               ) : (
                 <CloudOff size={10} />
               )}
               {isSyncing
-                ? "Syncing..."
+                ? t.home.syncing
                 : syncStatus === "synced"
-                  ? "Synced"
+                  ? t.home.synced
                   : syncStatus === "syncing"
-                    ? "Syncing"
-                    : "Offline"}
+                    ? t.home.syncing
+                    : t.home.offline}
             </button>
             <button
               type="button"
@@ -597,7 +593,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   : "0 2px 8px oklch(0.60 0.14 75 / 0.4)",
               }}
             >
-              {isGoodDay ? "Good Day 🎉" : "Keep Going 💪"}
+              {isGoodDay ? t.home.goodDay : t.home.keepGoing}
             </button>
           </div>
         </motion.div>
@@ -609,13 +605,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           style={{ borderColor: "oklch(var(--border))" }}
         >
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-            Shift Control
+            {t.shift.control}
           </p>
 
           {/* Date picker — drives all shift operations */}
           <div className="mb-3">
             <p className="text-xs font-medium text-muted-foreground mb-1">
-              Shift Date
+              {t.shift.shiftDate}
             </p>
             <Input
               data-ocid="shift.date.input"
@@ -659,14 +655,8 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
 
           {/* Shift active indicator */}
           {isShiftActive && (
-            <div
-              className="mb-2 px-3 py-1.5 rounded-xl text-xs font-medium"
-              style={{
-                background: "oklch(0.60 0.14 75 / 0.15)",
-                color: "oklch(0.45 0.12 75)",
-              }}
-            >
-              ⚡ Shift Active since{" "}
+            <div className="mb-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/60 border border-yellow-400 dark:border-yellow-500 text-yellow-900 dark:text-yellow-100 shadow-[0_0_12px_rgba(234,179,8,0.4)] dark:[text-shadow:0_0_8px_rgba(255,255,180,0.7)]">
+              {t.shift.activeSince}{" "}
               {new Date(selectedShift!.startTime).toLocaleTimeString("en-IN", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -691,7 +681,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 setShowEndShiftPanel(false);
               }}
             >
-              ▶ Start Shift
+              {t.shift.startShift}
             </Button>
             <Button
               data-ocid="shift.end_button"
@@ -707,7 +697,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 setShowStartShiftPanel(false);
               }}
             >
-              ■ End Shift
+              {t.shift.endShift}
             </Button>
           </div>
 
@@ -719,7 +709,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               className="mt-3 space-y-2"
             >
               <p className="text-xs font-medium text-muted-foreground">
-                Start Odometer (KM)
+                {t.home.startOdometerKM}
               </p>
               <Input
                 data-ocid="shift.start_km.input"
@@ -735,7 +725,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   className="flex-1 h-10 rounded-xl text-sm"
                   onClick={() => setShowStartShiftPanel(false)}
                 >
-                  Cancel
+                  {t.home.cancelBtn}
                 </Button>
                 <Button
                   data-ocid="shift.confirm_start.button"
@@ -743,7 +733,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   style={{ background: "oklch(0.45 0.20 142)" }}
                   onClick={handleStartShift}
                 >
-                  Confirm Start
+                  {t.home.confirmStart}
                 </Button>
               </div>
             </motion.div>
@@ -757,7 +747,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               className="mt-3 space-y-2"
             >
               <p className="text-xs font-medium text-muted-foreground">
-                Current Odometer (KM)
+                {t.home.currentOdometerKM}
               </p>
               <Input
                 data-ocid="shift.end_km.input"
@@ -773,7 +763,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   className="flex-1 h-10 rounded-xl text-sm"
                   onClick={() => setShowEndShiftPanel(false)}
                 >
-                  Cancel
+                  {t.home.cancelBtn}
                 </Button>
                 <Button
                   data-ocid="shift.confirm_end.button"
@@ -781,7 +771,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   style={{ background: "oklch(0.48 0.18 27)" }}
                   onClick={handleEndShift}
                 >
-                  Confirm End
+                  {t.home.confirmEnd}
                 </Button>
               </div>
             </motion.div>
@@ -800,14 +790,14 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 className="text-xs font-semibold"
                 style={{ color: "oklch(0.42 0.15 264)" }}
               >
-                ✅ Shift Completed
+                {t.home.shiftCompleted}
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                 <span>
-                  Start KM: <strong>{selectedShift.startKm}</strong>
+                  {t.home.startKM} <strong>{selectedShift.startKm}</strong>
                 </span>
                 <span>
-                  End KM: <strong>{selectedShift.endKm ?? "—"}</strong>
+                  {t.home.endKM} <strong>{selectedShift.endKm ?? "—"}</strong>
                 </span>
               </div>
               {showEditShiftPanel ? (
@@ -836,7 +826,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                         setEditEndKm("");
                       }}
                     >
-                      Cancel
+                      {t.home.cancelBtn}
                     </Button>
                     <Button
                       data-ocid="shift.save_edit.button"
@@ -844,7 +834,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                       style={{ background: "oklch(0.45 0.20 142)" }}
                       onClick={handleUpdateShift}
                     >
-                      Save
+                      {t.home.saveBtn}
                     </Button>
                   </div>
                 </div>
@@ -862,7 +852,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                       setShowEditShiftPanel(true);
                     }}
                   >
-                    ✏️ Edit
+                    {t.home.editShift}
                   </Button>
                   <Button
                     data-ocid="shift.delete_button"
@@ -872,7 +862,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                     style={{ color: "oklch(0.52 0.22 27)" }}
                     onClick={() => setShowDeleteShiftConfirm(true)}
                   >
-                    🗑️ Delete
+                    {t.home.deleteShift}
                   </Button>
                 </div>
               )}
@@ -891,7 +881,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               }}
               onClick={() => setShiftSummaryOpen(true)}
             >
-              📈 View Summary
+              {t.home.viewSummary}
             </Button>
           )}
 
@@ -908,7 +898,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   : addOffDay(selectedControlDate)
               }
             >
-              {isOffDay ? "Unmark Off Day" : "🛌 Off Day"}
+              {isOffDay ? t.shift.unmarkOffDay : t.shift.markOffDay}
             </Button>
             <Button
               data-ocid="shift.personal_run.button"
@@ -930,7 +920,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 }
               }}
             >
-              {isPersonalRun ? "Clear Personal Run" : "🚗 Personal Run"}
+              {isPersonalRun
+                ? t.shift.clearPersonalRun
+                : t.shift.markPersonalRun}
             </Button>
           </div>
 
@@ -951,8 +943,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 />
                 {selectedShift?.endKm && selectedShift?.startKm && (
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Auto-calculated from odometer (End KM − Start KM). You can
-                    edit if needed.
+                    {t.home.autoCalcHint}
                   </p>
                 )}
               </div>
@@ -962,7 +953,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 style={{ background: "oklch(0.52 0.21 264)" }}
                 onClick={handlePersonalRun}
               >
-                Save
+                {t.home.saveBtn}
               </Button>
             </motion.div>
           )}
@@ -974,15 +965,11 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             data-ocid="shift.active.panel"
-            className="flex items-center gap-2 px-4 py-3 rounded-xl dark:bg-yellow-950/40"
-            style={{
-              background: "oklch(0.75 0.15 75 / 0.18)",
-              border: "1px solid oklch(0.72 0.15 75 / 0.4)",
-            }}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl bg-yellow-100 dark:bg-yellow-900/60 border border-yellow-400 dark:border-yellow-500 shadow-[0_0_12px_rgba(234,179,8,0.4)]"
           >
             <span style={{ fontSize: 16 }}>⚡</span>
-            <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-100 dark:[text-shadow:0_0_8px_rgba(255,255,180,0.7)]">
-              Shift still active — End Shift to see final profit summary
+            <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 dark:[text-shadow:0_0_8px_rgba(255,255,180,0.7)]">
+              {t.shift.stillActive}
             </p>
           </motion.div>
         )}
@@ -1039,6 +1026,11 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 value={formatAmount(todayFuelCost)}
                 accent="oklch(0.62 0.18 27)"
               />
+              <StatPill
+                label={t.history.rideKM}
+                value={`${todayRideKm.toFixed(1)} km`}
+                accent="oklch(0.55 0.16 142)"
+              />
             </div>
           </div>
         </motion.div>
@@ -1057,29 +1049,29 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             className="text-[11px] font-semibold uppercase tracking-widest mb-3"
             style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.15 264)" }}
           >
-            Profit Analyzer
+            {t.shift.profitAnalyzer}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <ProfitTile
-              label="Today's Profit"
+              label={t.home.todayProfit}
               value={formatAmount(netProfit)}
               color="oklch(0.55 0.17 47)"
               bg="oklch(0.72 0.19 47 / 0.10)"
             />
             <ProfitTile
-              label="Profit/Ride"
+              label={t.home.profitPerRide}
               value={formatAmount(profitPerRide)}
               color="oklch(0.42 0.18 264)"
               bg="oklch(0.52 0.21 264 / 0.10)"
             />
             <ProfitTile
-              label="Profit/KM"
+              label={t.home.profitPerKM}
               value={formatAmount(profitPerKm)}
               color="oklch(0.42 0.14 142)"
               bg="oklch(0.58 0.16 142 / 0.10)"
             />
             <ProfitTile
-              label="Dead KM"
+              label={t.home.deadKM}
               value={`${deadKm.toFixed(1)} km`}
               color="oklch(0.50 0.18 27)"
               bg="oklch(0.62 0.22 27 / 0.08)"
@@ -1107,7 +1099,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 className="text-[10px] font-semibold uppercase tracking-wider"
                 style={{ color: "oklch(0.55 0.17 47)" }}
               >
-                Best Platform
+                {t.shift.bestPlatform}
               </p>
             </div>
             {bestPlatform ? (
@@ -1116,12 +1108,12 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   {bestPlatform.platform}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  Avg {formatAmount(bestPlatform.avg)}/ride
+                  {t.home.avg} {formatAmount(bestPlatform.avg)}/ride
                 </p>
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground leading-snug">
-                Need more rides
+                {t.home.needMoreRides}
               </p>
             )}
           </div>
@@ -1143,7 +1135,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 className="text-[10px] font-semibold uppercase tracking-wider"
                 style={{ color: "oklch(0.42 0.18 264)" }}
               >
-                Best Area
+                {t.shift.bestArea}
               </p>
             </div>
             {bestArea ? (
@@ -1152,12 +1144,12 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   {bestArea.area}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  Avg {formatAmount(bestArea.avg)}/ride
+                  {t.home.avg} {formatAmount(bestArea.avg)}/ride
                 </p>
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground leading-snug">
-                Need more rides
+                {t.home.needMoreRides}
               </p>
             )}
           </div>
@@ -1171,11 +1163,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           style={{ borderColor: "oklch(var(--border))" }}
         >
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-            This Week
+            {t.shift.thisWeek}
           </p>
           <div className="grid grid-cols-4 gap-2 text-center">
             <div>
-              <p className="text-[10px] text-muted-foreground">Rides</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.weekRides}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.18 264)" }}
@@ -1184,7 +1178,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Income</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.weekIncome}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.14 142)" }}
@@ -1194,7 +1190,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Profit</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.weekProfit}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.14 142)" }}
@@ -1204,7 +1202,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Best Day</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.weekBestDay}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.55 0.17 47)" }}
@@ -1228,11 +1228,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             className="text-[11px] font-semibold uppercase tracking-widest mb-2"
             style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.12 142)" }}
           >
-            All Time Totals
+            {t.shift.allTimeTotals}
           </p>
           <div className="grid grid-cols-4 gap-2 text-center">
             <div>
-              <p className="text-[10px] text-muted-foreground">Rides</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.allTimeRides}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.18 264)" }}
@@ -1241,7 +1243,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Income</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.allTimeIncome}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.14 142)" }}
@@ -1250,7 +1254,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Fuel</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.allTimeFuel}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.50 0.18 27)" }}
@@ -1259,7 +1265,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Ride KM</p>
+              <p className="text-[10px] text-muted-foreground">
+                {t.home.allTimeRideKM}
+              </p>
               <p
                 className="text-sm font-bold"
                 style={{ color: "oklch(0.42 0.18 264)" }}
@@ -1323,56 +1331,49 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             onClick={() => setFuelModalOpen(true)}
           >
             <Fuel size={18} />
-            Fuel Log
+            {t.home.fuelLog}
           </Button>
         </motion.div>
 
-        {/* ─── Smart Insights ─── */}
-        {rides.length < 5 ? (
-          <motion.div
-            {...fadeUp(0.24)}
-            className="rounded-2xl p-4 border bg-card"
-            style={{ borderColor: "oklch(var(--border))" }}
-          >
-            <div className="flex items-center gap-2 mb-2">
+        {/* ─── Smart Tips (short, dashboard-only) ─── */}
+        <motion.div
+          {...fadeUp(0.24)}
+          className="rounded-2xl p-4 border bg-card"
+          style={{ borderColor: "oklch(var(--border))" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
+            >
               <Zap size={14} style={{ color: "oklch(0.45 0.18 264)" }} />
-              <h3 className="font-semibold text-sm font-display">
-                {t.home.insights}
-              </h3>
             </div>
+            <h3 className="font-semibold text-sm font-display">
+              {t.home.insights}
+            </h3>
+          </div>
+          {rides.length < 5 ? (
             <p className="text-sm text-muted-foreground">
-              More ride data needed for insights (need 5+ rides)
+              {t.home.moreRidesNeeded}
             </p>
-          </motion.div>
-        ) : recommendations.length > 0 ? (
-          <motion.div
-            {...fadeUp(0.24)}
-            className="rounded-2xl p-4 border bg-card"
-            style={{ borderColor: "oklch(var(--border))" }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
-              >
-                <Zap size={14} style={{ color: "oklch(0.45 0.18 264)" }} />
-              </div>
-              <h3 className="font-semibold text-sm font-display">
-                {t.home.insights}
-              </h3>
-            </div>
-            <div className="space-y-2.5">
-              {recommendations.slice(0, 3).map((rec) => (
-                <div key={rec} className="flex gap-2.5 items-start">
-                  <span className="text-base mt-0.5">💡</span>
-                  <p className="text-sm text-foreground leading-relaxed">
-                    {rec}
-                  </p>
-                </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {t.home.dashboardTips.map((tip) => (
+                <span
+                  key={tip}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{
+                    background: "oklch(0.52 0.21 264 / 0.10)",
+                    color: isDark ? "#EAF2FF" : "oklch(0.38 0.16 264)",
+                    border: "1px solid oklch(0.52 0.21 264 / 0.20)",
+                  }}
+                >
+                  💡 {tip}
+                </span>
               ))}
             </div>
-          </motion.div>
-        ) : null}
+          )}
+        </motion.div>
 
         {/* ─── Driver Comparison Insight ─── */}
         {rides.length >= 5 &&
@@ -1401,13 +1402,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                     />
                   </div>
                   <h3 className="font-semibold text-sm font-display">
-                    Driver Comparison
+                    {t.shift.driverComparison}
                   </h3>
                 </div>
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground mb-0.5">
-                      Your Profit per KM
+                      {t.home.yourProfitPerKM}
                     </p>
                     <p
                       className="text-2xl font-bold font-display"
@@ -1422,7 +1423,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 italic">
-                  🏙️ City average data coming soon
+                  {t.shift.cityAvgSoon}
                 </p>
               </motion.div>
             );
@@ -1478,7 +1479,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   {sym}
                   {totalIncome.toFixed(0)}
                 </p>
-                <p className="text-xs text-muted-foreground">Earned Today</p>
+                <p className="text-xs text-muted-foreground">
+                  {t.home.earnedToday}
+                </p>
               </div>
               <div className="rounded-xl bg-muted/50 p-3 text-center">
                 <p
@@ -1496,7 +1499,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
-                    ? "Remaining"
+                    ? t.home.remaining
                     : "Target Achieved"}
                 </p>
               </div>
@@ -1505,7 +1508,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   {sym}
                   {(settings.dailyTarget || 0).toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground">Daily Target</p>
+                <p className="text-xs text-muted-foreground">
+                  {t.home.dailyTarget}
+                </p>
               </div>
             </div>
             <div
@@ -1537,7 +1542,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             )}
             {bestArea && (
               <div className="text-xs text-muted-foreground text-center">
-                Best area:{" "}
+                {t.home.bestArea}:{" "}
                 <span className="font-semibold text-foreground">
                   {bestArea.area}
                 </span>
@@ -1552,11 +1557,10 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 max-w-sm w-full space-y-4">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-              Delete Shift?
+              {t.home.deleteShiftConfirm}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Are you sure you want to delete this shift? This action cannot be
-              undone.
+              {t.home.deleteShiftDesc}
             </p>
             <div className="flex gap-3">
               <Button
@@ -1565,7 +1569,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 className="flex-1"
                 onClick={() => setShowDeleteShiftConfirm(false)}
               >
-                Cancel
+                {t.home.cancelBtn}
               </Button>
               <Button
                 data-ocid="shift.delete_confirm.confirm_button"
@@ -1578,10 +1582,10 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   setShowEndShiftPanel(false);
                   setEditStartKm("");
                   setEditEndKm("");
-                  toast.success("Shift deleted");
+                  toast.success(t.shift.shiftUpdated);
                 }}
               >
-                Delete
+                {t.home.deleteBtn}
               </Button>
             </div>
           </div>

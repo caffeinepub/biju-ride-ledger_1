@@ -6,6 +6,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CheckCircle2 } from "lucide-react";
+import { getTranslations } from "../i18n";
+import { useStore } from "../store/useStore";
 
 interface ShiftSummary {
   rides: number;
@@ -36,17 +38,21 @@ export default function ShiftSummaryModal({
   summary,
   currencySymbol = "₹",
 }: ShiftSummaryModalProps) {
+  const { settings } = useStore();
+  const t = getTranslations(settings.language);
+  const ts = t.shift_summary;
   const sym = currencySymbol;
+
   const rows: { label: string; value: string; highlight?: boolean }[] = [
-    { label: "Total Rides", value: String(summary.rides) },
-    { label: "Ride KM", value: `${summary.rideKm.toFixed(1)} km` },
-    { label: "Run KM", value: `${summary.runKm.toFixed(1)} km` },
-    { label: "Dead KM", value: `${summary.deadKm.toFixed(1)} km` },
-    { label: "Total Income", value: fmt(sym, summary.income) },
-    { label: "Fuel Cost", value: fmt(sym, summary.fuelCost) },
-    { label: "Tips", value: fmt(sym, summary.tips) },
+    { label: ts.totalRides, value: String(summary.rides) },
+    { label: ts.rideKM, value: `${summary.rideKm.toFixed(1)} km` },
+    { label: ts.runKM, value: `${summary.runKm.toFixed(1)} km` },
+    { label: ts.deadKM, value: `${summary.deadKm.toFixed(1)} km` },
+    { label: ts.totalIncome, value: fmt(sym, summary.income) },
+    { label: ts.fuelCost, value: fmt(sym, summary.fuelCost) },
+    { label: ts.tips, value: fmt(sym, summary.tips) },
     {
-      label: "Net Profit",
+      label: ts.netProfit,
       value: fmt(sym, summary.netProfit),
       highlight: true,
     },
@@ -62,7 +68,7 @@ export default function ShiftSummaryModal({
           <div className="flex items-center gap-2 justify-center mb-1">
             <CheckCircle2 size={22} style={{ color: "oklch(0.58 0.16 142)" }} />
             <DialogTitle className="text-lg font-bold font-display">
-              Today's Summary
+              {ts.title}
             </DialogTitle>
           </div>
           <p className="text-xs text-center text-muted-foreground">
@@ -101,7 +107,7 @@ export default function ShiftSummaryModal({
           }}
           onClick={onClose}
         >
-          Close
+          {ts.close}
         </Button>
       </DialogContent>
     </Dialog>
