@@ -554,10 +554,10 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                     : syncStatus === "synced"
                       ? isDark
                         ? "white"
-                        : "oklch(0.42 0.14 142)"
+                        : "oklch(0.45 0.21 145)"
                       : syncStatus === "offline"
                         ? "oklch(0.50 0.16 75)"
-                        : "oklch(0.42 0.14 142)",
+                        : "oklch(0.45 0.21 145)",
                 boxShadow:
                   isSyncing || syncStatus === "synced"
                     ? "0 0 8px rgba(34, 197, 94, 0.5)"
@@ -859,7 +859,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                     variant="outline"
                     size="sm"
                     className="flex-1 h-8 rounded-lg text-xs"
-                    style={{ color: "oklch(0.52 0.22 27)" }}
+                    style={{ color: "oklch(0.58 0.22 30)" }}
                     onClick={() => setShowDeleteShiftConfirm(true)}
                   >
                     {t.home.deleteShift}
@@ -877,7 +877,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               className="w-full h-10 rounded-xl text-sm mt-2 font-semibold"
               style={{
                 borderColor: "oklch(0.52 0.21 264 / 0.4)",
-                color: "oklch(0.42 0.18 264)",
+                color: "oklch(0.46 0.22 255)",
               }}
               onClick={() => setShiftSummaryOpen(true)}
             >
@@ -1055,19 +1055,19 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             <ProfitTile
               label={t.home.todayProfit}
               value={formatAmount(netProfit)}
-              color="oklch(0.55 0.17 47)"
+              color="oklch(0.62 0.22 50)"
               bg="oklch(0.72 0.19 47 / 0.10)"
             />
             <ProfitTile
               label={t.home.profitPerRide}
               value={formatAmount(profitPerRide)}
-              color="oklch(0.42 0.18 264)"
+              color="oklch(0.46 0.22 255)"
               bg="oklch(0.52 0.21 264 / 0.10)"
             />
             <ProfitTile
               label={t.home.profitPerKM}
               value={formatAmount(profitPerKm)}
-              color="oklch(0.42 0.14 142)"
+              color="oklch(0.45 0.21 145)"
               bg="oklch(0.58 0.16 142 / 0.10)"
             />
             <ProfitTile
@@ -1092,12 +1092,12 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             <div className="flex items-center gap-1.5 mb-1">
               <Star
                 size={12}
-                style={{ color: "oklch(0.55 0.17 47)" }}
-                fill="oklch(0.55 0.17 47)"
+                style={{ color: "oklch(0.62 0.22 50)" }}
+                fill="oklch(0.62 0.22 50)"
               />
               <p
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "oklch(0.55 0.17 47)" }}
+                style={{ color: "oklch(0.62 0.22 50)" }}
               >
                 {t.shift.bestPlatform}
               </p>
@@ -1128,12 +1128,12 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             <div className="flex items-center gap-1.5 mb-1">
               <Star
                 size={12}
-                style={{ color: "oklch(0.42 0.18 264)" }}
-                fill="oklch(0.42 0.18 264)"
+                style={{ color: "oklch(0.46 0.22 255)" }}
+                fill="oklch(0.46 0.22 255)"
               />
               <p
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "oklch(0.42 0.18 264)" }}
+                style={{ color: "oklch(0.46 0.22 255)" }}
               >
                 {t.shift.bestArea}
               </p>
@@ -1172,7 +1172,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.18 264)" }}
+                style={{ color: "oklch(0.46 0.22 255)" }}
               >
                 {weeklyData.rides}
               </p>
@@ -1183,7 +1183,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.14 142)" }}
+                style={{ color: "oklch(0.45 0.21 145)" }}
               >
                 {sym}
                 {weeklyData.income.toFixed(0)}
@@ -1195,7 +1195,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.14 142)" }}
+                style={{ color: "oklch(0.45 0.21 145)" }}
               >
                 {sym}
                 {weeklyData.profit.toFixed(0)}
@@ -1207,7 +1207,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.55 0.17 47)" }}
+                style={{ color: "oklch(0.62 0.22 50)" }}
               >
                 {weeklyData.bestDay}
               </p>
@@ -1226,7 +1226,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
         >
           <p
             className="text-[11px] font-semibold uppercase tracking-widest mb-2"
-            style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.12 142)" }}
+            style={{ color: isDark ? "#F1F5F9" : "oklch(0.45 0.20 145)" }}
           >
             {t.shift.allTimeTotals}
           </p>
@@ -1237,7 +1237,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.18 264)" }}
+                style={{ color: "oklch(0.46 0.22 255)" }}
               >
                 {allTimeRides}
               </p>
@@ -1248,7 +1248,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.14 142)" }}
+                style={{ color: "oklch(0.45 0.21 145)" }}
               >
                 {formatAmount(allTimeIncome)}
               </p>
@@ -1270,7 +1270,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.42 0.18 264)" }}
+                style={{ color: "oklch(0.46 0.22 255)" }}
               >
                 {allTimeDist.toFixed(0)}km
               </p>
@@ -1290,7 +1290,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 className="w-7 h-7 rounded-lg flex items-center justify-center"
                 style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
               >
-                <Target size={15} style={{ color: "oklch(0.45 0.18 264)" }} />
+                <Target size={15} style={{ color: "oklch(0.49 0.22 255)" }} />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1305,8 +1305,8 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               className="text-sm font-bold"
               style={{
                 color: isGoodDay
-                  ? "oklch(0.42 0.14 142)"
-                  : "oklch(0.42 0.18 264)",
+                  ? "oklch(0.45 0.21 145)"
+                  : "oklch(0.46 0.22 255)",
               }}
             >
               {progressPct.toFixed(0)}%
@@ -1346,7 +1346,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
             >
-              <Zap size={14} style={{ color: "oklch(0.45 0.18 264)" }} />
+              <Zap size={14} style={{ color: "oklch(0.49 0.22 255)" }} />
             </div>
             <h3 className="font-semibold text-sm font-display">
               {t.home.insights}
@@ -1398,7 +1398,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   >
                     <TrendingUp
                       size={14}
-                      style={{ color: "oklch(0.45 0.18 264)" }}
+                      style={{ color: "oklch(0.49 0.22 255)" }}
                     />
                   </div>
                   <h3 className="font-semibold text-sm font-display">
@@ -1445,7 +1445,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             data-ocid="home.keep_going.modal"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base">Daily Progress</h3>
+              <h3 className="font-bold text-base">{t.home.dailyProgress}</h3>
               <button
                 type="button"
                 data-ocid="home.keep_going.close_button"
@@ -1457,7 +1457,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             </div>
             <div>
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                <span>Progress</span>
+                <span>{t.home.progressLabel}</span>
                 <span>{progressPct.toFixed(0)}%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-muted">
@@ -1489,18 +1489,18 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                   style={{
                     color:
                       Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
-                        ? "oklch(0.55 0.17 47)"
+                        ? "oklch(0.62 0.22 50)"
                         : "oklch(0.48 0.16 142)",
                   }}
                 >
                   {Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
                     ? `${sym}${Math.max(0, (settings.dailyTarget || 0) - totalIncome).toFixed(0)}`
-                    : "Done!"}
+                    : t.home.done}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
                     ? t.home.remaining
-                    : "Target Achieved"}
+                    : t.home.targetAchieved}
                 </p>
               </div>
               <div className="rounded-xl bg-muted/50 p-3 text-center col-span-2">
@@ -1522,19 +1522,19 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             >
               <p className="text-sm font-medium">
                 {progressPct >= 100
-                  ? "Fantastic! You have hit your target today!"
+                  ? t.home.motivational[4]
                   : progressPct >= 75
-                    ? "Almost there! Just a few more rides!"
+                    ? t.home.motivational[3]
                     : progressPct >= 50
-                      ? "Great progress! Halfway to your goal!"
+                      ? t.home.motivational[2]
                       : progressPct >= 25
-                        ? "Good start! Keep the momentum going!"
-                        : "Every ride counts! You have got this!"}
+                        ? t.home.motivational[1]
+                        : t.home.motivational[0]}
               </p>
             </div>
             {bestTimeSlot && (
               <div className="text-xs text-muted-foreground text-center">
-                Best earning time:{" "}
+                {t.home.bestEarningTime}:{" "}
                 <span className="font-semibold text-foreground">
                   {bestTimeSlot}
                 </span>

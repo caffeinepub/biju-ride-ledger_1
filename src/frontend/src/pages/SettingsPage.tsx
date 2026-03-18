@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -70,6 +69,92 @@ export default function SettingsPage({
     <div className="flex flex-col min-h-screen pb-20">
       <Header title={t.settings.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4 space-y-4">
+        {/* Language Dropdown */}
+        <div className="rounded-2xl bg-card border border-border p-4">
+          <h3 className="font-display font-semibold mb-3">
+            {t.settings.language}
+          </h3>
+          <Select
+            value={settings.language}
+            onValueChange={(v) =>
+              updateSettings({ language: v as "en" | "bn" | "hi" })
+            }
+          >
+            <SelectTrigger
+              data-ocid="settings.language.select"
+              className="h-11 rounded-xl"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">🌐 English</SelectItem>
+              <SelectItem value="bn">🇧🇩 বাংলা</SelectItem>
+              <SelectItem value="hi">🇮🇳 हिन्दी</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Currency Dropdown */}
+        <div className="rounded-2xl bg-card border border-border p-4">
+          <h3 className="font-display font-semibold mb-3">
+            {t.settings.currency}
+          </h3>
+          <Select
+            value={settings.currency}
+            onValueChange={(v) =>
+              updateSettings({ currency: v as "INR" | "BDT" | "USD" })
+            }
+          >
+            <SelectTrigger
+              data-ocid="settings.currency.select"
+              className="h-11 rounded-xl"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="INR">₹ INR — Indian Rupee</SelectItem>
+              <SelectItem value="BDT">৳ BDT — Bangladeshi Taka</SelectItem>
+              <SelectItem value="USD">$ USD — US Dollar</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Default Fuel Type Dropdown */}
+        <div className="rounded-2xl bg-card border border-border p-4">
+          <h3 className="font-display font-semibold mb-3">
+            {t.settings.fuelType || "Default Fuel Type"}
+          </h3>
+          <Select
+            value={settings.defaultFuelType || "petrol"}
+            onValueChange={(v) =>
+              updateSettings({
+                defaultFuelType: v as
+                  | "petrol"
+                  | "diesel"
+                  | "cng"
+                  | "electric"
+                  | "hybrid",
+              })
+            }
+          >
+            <SelectTrigger
+              data-ocid="settings.fueltype.select"
+              className="h-11 rounded-xl"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="petrol">⛽ {t.fuel.petrol}</SelectItem>
+              <SelectItem value="diesel">🛢️ {t.fuel.diesel}</SelectItem>
+              <SelectItem value="cng">🟢 {t.fuel.cng}</SelectItem>
+              <SelectItem value="electric">⚡ {t.fuel.electric}</SelectItem>
+              <SelectItem value="hybrid">
+                🔄 {t.fuel.hybrid || "Hybrid"}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Platform Commissions */}
         <div className="rounded-2xl bg-card border border-border p-4">
           <h3 className="font-display font-semibold mb-3">
@@ -105,7 +190,7 @@ export default function SettingsPage({
             >
               <p
                 className="text-sm font-semibold"
-                style={{ color: "oklch(0.65 0.15 264)" }}
+                style={{ color: "oklch(0.55 0.18 264)" }}
               >
                 {selectedCommissionPlatform}
               </p>
@@ -187,7 +272,7 @@ export default function SettingsPage({
           </div>
         </div>
 
-        {/* Fuel Settings */}
+        {/* Fuel Price */}
         <div className="rounded-2xl bg-card border border-border p-4">
           <Label className="font-semibold font-display">
             {t.settings.fuelPrice}
@@ -205,76 +290,6 @@ export default function SettingsPage({
             }}
             className="mt-2 h-12 text-base"
           />
-        </div>
-
-        {/* Language */}
-        <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-3">
-            {t.settings.language}
-          </h3>
-          <div className="flex gap-2" data-ocid="settings.language.toggle">
-            {(
-              [
-                ["en", "English"],
-                ["bn", "বাংলা"],
-                ["hi", "हिन्दी"],
-              ] as const
-            ).map(([code, label]) => (
-              <button
-                type="button"
-                key={code}
-                onClick={() => updateSettings({ language: code })}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                style={{
-                  background:
-                    settings.language === code
-                      ? "oklch(0.58 0.21 264)"
-                      : "oklch(var(--muted))",
-                  color:
-                    settings.language === code
-                      ? "white"
-                      : "oklch(var(--muted-foreground))",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Currency */}
-        <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-3">
-            {t.settings.currency}
-          </h3>
-          <div className="flex gap-2" data-ocid="settings.currency.toggle">
-            {(
-              [
-                ["INR", "₹ INR"],
-                ["BDT", "৳ BDT"],
-                ["USD", "$ USD"],
-              ] as const
-            ).map(([code, label]) => (
-              <button
-                type="button"
-                key={code}
-                onClick={() => updateSettings({ currency: code })}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                style={{
-                  background:
-                    settings.currency === code
-                      ? "oklch(0.72 0.19 47)"
-                      : "oklch(var(--muted))",
-                  color:
-                    settings.currency === code
-                      ? "white"
-                      : "oklch(var(--muted-foreground))",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* App Preferences */}
@@ -298,7 +313,7 @@ export default function SettingsPage({
                   style={{
                     background:
                       appTheme === th
-                        ? "oklch(0.58 0.21 264)"
+                        ? "oklch(0.42 0.18 264)"
                         : "oklch(var(--muted))",
                     color:
                       appTheme === th
@@ -337,7 +352,7 @@ export default function SettingsPage({
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all uppercase"
                     style={{
                       background: isOn
-                        ? "oklch(0.65 0.15 142)"
+                        ? "oklch(0.50 0.18 142)"
                         : "oklch(var(--muted))",
                       color: isOn ? "white" : "oklch(var(--muted-foreground))",
                     }}

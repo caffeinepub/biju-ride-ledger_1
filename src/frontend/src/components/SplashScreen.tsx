@@ -36,18 +36,18 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
       </div>
 
       <div className="relative z-10 flex flex-col items-center gap-6 px-8">
-        {/* Logo: fade-in + scale spring animation */}
+        {/* Logo: fade-in + scale spring animation — natural shape, no circular clip */}
         <motion.div
           initial={{ scale: 0.3, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
-          className="relative"
+          className="relative flex items-center justify-center"
         >
-          {/* Glow ring */}
+          {/* Soft glow behind logo */}
           <motion.div
-            className="absolute inset-0 rounded-full"
-            style={{ background: "oklch(0.72 0.19 47 / 0.35)" }}
-            animate={{ scale: [1, 1.15, 1] }}
+            className="absolute inset-0 blur-2xl opacity-40"
+            style={{ background: "oklch(0.72 0.19 47 / 0.5)" }}
+            animate={{ scale: [1, 1.12, 1] }}
             transition={{
               duration: 2,
               repeat: Number.POSITIVE_INFINITY,
@@ -57,7 +57,8 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
           <img
             src="/assets/uploads/file_00000000154071faaeaf583d8d2945a9-1.png"
             alt="Biju's RideBook Logo"
-            className="relative w-36 h-36 object-contain drop-shadow-2xl rounded-3xl"
+            className="relative w-40 h-40 object-contain drop-shadow-2xl"
+            style={{ borderRadius: 0, background: "transparent" }}
           />
         </motion.div>
 

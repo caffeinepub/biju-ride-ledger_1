@@ -74,6 +74,12 @@ type Translations = {
     fuelLog: string;
     saveBtn: string;
     dashboardTips: string[];
+    dailyProgress: string;
+    progressLabel: string;
+    targetAchieved: string;
+    done: string;
+    bestEarningTime: string;
+    motivational: string[];
   };
   addRide: {
     title: string;
@@ -180,6 +186,7 @@ type Translations = {
     platformCommissions: string;
     fuelSettings: string;
     fuelPrice: string;
+    fuelType: string;
     language: string;
     currency: string;
     save: string;
@@ -213,6 +220,7 @@ type Translations = {
     diesel: string;
     cng: string;
     electric: string;
+    hybrid: string;
     selectType: string;
     toastError: string;
     toastSuccess: string;
@@ -413,6 +421,18 @@ const translations: Record<Language, Translations> = {
         "Cash rides earn more tips",
         "Peak hours: 7-9AM & 5-8PM",
       ],
+      dailyProgress: "Daily Progress",
+      progressLabel: "Progress",
+      targetAchieved: "Target Achieved",
+      done: "Done!",
+      bestEarningTime: "Best earning time",
+      motivational: [
+        "Every ride counts! You've got this!",
+        "Good start! Keep the momentum going!",
+        "Great progress! Halfway to your goal!",
+        "Almost there! Just a few more rides!",
+        "Fantastic! You have hit your target today!",
+      ],
     },
     addRide: {
       title: "Add Ride",
@@ -522,6 +542,7 @@ const translations: Record<Language, Translations> = {
       platformCommissions: "Platform Commissions",
       fuelSettings: "Fuel Settings",
       fuelPrice: "Fuel Price per Litre (₹)",
+      fuelType: "Default Fuel Type",
       language: "Language",
       currency: "Currency",
       save: "Save Settings",
@@ -555,6 +576,7 @@ const translations: Record<Language, Translations> = {
       diesel: "Diesel",
       cng: "CNG",
       electric: "Electric",
+      hybrid: "Hybrid",
       selectType: "Select fuel type",
       toastError: "Please fill all fields correctly",
       toastSuccess: "Fuel entry saved!",
@@ -762,6 +784,18 @@ const translations: Record<Language, Translations> = {
         "নগদ রাইডে বেশি টিপস পাওয়া যায়",
         "পিক আওয়ার: সকাল ৭-৯ ও সন্ধ্যা ৫-৮",
       ],
+      dailyProgress: "দৈনিক অগ্রগতি",
+      progressLabel: "অগ্রগতি",
+      targetAchieved: "লক্ষ্য অর্জিত",
+      done: "শেষ!",
+      bestEarningTime: "সেরা উপার্জনের সময়",
+      motivational: [
+        "প্রতিটি রাইড গুরুত্বপূর্ণ! তুমি পারবে!",
+        "ভালো শুরু! এগিয়ে চলো!",
+        "দারুণ অগ্রগতি! লক্ষ্যের অর্ধেক পথ!",
+        "প্রায় পৌঁছে গেছ! আর কয়েকটি রাইড!",
+        "অসাধারণ! আজকের লক্ষ্য পূরণ হয়েছে!",
+      ],
     },
     addRide: {
       title: "রাইড যোগ করুন",
@@ -870,6 +904,7 @@ const translations: Record<Language, Translations> = {
       platformCommissions: "কমিশন সেটিংস",
       fuelSettings: "জ্বালানি সেটিংস",
       fuelPrice: "প্রতি লিটার মূল্য (₹)",
+      fuelType: "ডিফল্ট জ্বালানির ধরন",
       language: "ভাষা",
       currency: "মুদ্রা",
       save: "সেভ করুন",
@@ -903,6 +938,7 @@ const translations: Record<Language, Translations> = {
       diesel: "ডিজেল",
       cng: "সিএনজি",
       electric: "ইলেক্ট্রিক",
+      hybrid: "হাইব্রিড",
       selectType: "জ্বালানির ধরন বেছে নিন",
       toastError: "সব তথ্য সঠিকভাবে পূরণ করুন",
       toastSuccess: "জ্বালানি এন্ট্রি সংরক্ষিত!",
@@ -1110,6 +1146,18 @@ const translations: Record<Language, Translations> = {
         "नकद सवारी में ज्यादा टिप्स मिलते हैं",
         "पीक समय: सुबह 7-9 और शाम 5-8",
       ],
+      dailyProgress: "दैनिक प्रगति",
+      progressLabel: "प्रगति",
+      targetAchieved: "लक्ष्य प्राप्त",
+      done: "हो गया!",
+      bestEarningTime: "सबसे अच्छा कमाई का समय",
+      motivational: [
+        "हर सवारी मायने रखती है! आप कर सकते हैं!",
+        "अच्छी शुरुआत! गति बनाए रखें!",
+        "शानदार प्रगति! लक्ष्य के आधे रास्ते!",
+        "लगभग पहुंच गए! बस कुछ और सवारियां!",
+        "शानदार! आपने आज का लक्ष्य पूरा किया!",
+      ],
     },
     addRide: {
       title: "राइड जोड़ें",
@@ -1218,6 +1266,7 @@ const translations: Record<Language, Translations> = {
       platformCommissions: "कमीशन सेटिंग्स",
       fuelSettings: "ईंधन सेटिंग्स",
       fuelPrice: "प्रति लीटर मूल्य (₹)",
+      fuelType: "डिफ़ॉल्ट ईंधन प्रकार",
       language: "भाषा",
       currency: "मुद्रा",
       save: "सेव करें",
@@ -1251,6 +1300,7 @@ const translations: Record<Language, Translations> = {
       diesel: "डीज़ल",
       cng: "सीएनजी",
       electric: "इलेक्ट्रिक",
+      hybrid: "हाइब्रिड",
       selectType: "ईंधन प्रकार चुनें",
       toastError: "सभी फ़ील्ड सही से भरें",
       toastSuccess: "ईंधन एंट्री सहेजी गई!",

@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { getTranslations } from "../i18n";
 import { useStore } from "../store/useStore";
 
-type FuelType = "petrol" | "diesel" | "cng" | "electric";
+type FuelType = "petrol" | "diesel" | "cng" | "electric" | "hybrid";
 
 interface FuelEntryModalProps {
   open: boolean;
@@ -37,7 +37,7 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
   const [litres, setLitres] = useState("");
   const [cost, setCost] = useState("");
 
-  const isElectric = fuelType === "electric";
+  const isElectric = fuelType === "electric" || fuelType === "hybrid";
 
   const handleSave = () => {
     const odo = Number.parseFloat(odometerKm);
@@ -94,6 +94,9 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
                 <SelectItem value="diesel">{t.fuel.diesel}</SelectItem>
                 <SelectItem value="cng">{t.fuel.cng}</SelectItem>
                 <SelectItem value="electric">{t.fuel.electric}</SelectItem>
+                <SelectItem value="hybrid">
+                  {t.fuel.hybrid || "Hybrid"}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

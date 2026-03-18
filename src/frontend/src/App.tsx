@@ -224,7 +224,14 @@ function AppInner() {
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold"
                 onClick={() => {
                   setShowExitConfirm(false);
-                  window.history.go(-2);
+                  // Try window.close() first (works in PWA standalone mode)
+                  // If that fails (browser tab), go back as far as possible
+                  try {
+                    window.close();
+                  } catch (_) {}
+                  setTimeout(() => {
+                    window.history.go(-window.history.length);
+                  }, 100);
                 }}
               >
                 Exit

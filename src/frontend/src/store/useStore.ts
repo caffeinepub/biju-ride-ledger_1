@@ -83,6 +83,7 @@ export interface Settings {
   fuelPricePerLitre: number;
   language: "en" | "bn" | "hi";
   currency: "INR" | "BDT" | "USD";
+  defaultFuelType: "petrol" | "diesel" | "cng" | "electric" | "hybrid";
   platformCommissions: Record<Platform, PlatformCommission>;
 }
 
@@ -109,6 +110,7 @@ const defaultSettings: Settings = {
   fuelPricePerLitre: 105,
   language: "en",
   currency: "INR",
+  defaultFuelType: "petrol",
   platformCommissions: {
     Uber: { type: "daily_fee", value: 10 },
     InDrive: { type: "percentage", value: 10 },
