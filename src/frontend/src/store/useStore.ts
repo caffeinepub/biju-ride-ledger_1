@@ -30,6 +30,9 @@ export const PLATFORMS: Platform[] = [
 
 export interface Ride {
   id: string;
+  ride_id?: string;
+  ride_date?: string;
+  entry_timestamp?: string;
   platform: Platform;
   fare: number;
   commission: number;
@@ -39,7 +42,7 @@ export interface Ride {
   dropArea: string;
   datetime: string;
   netIncome: number;
-  paymentType?: "cash" | "online";
+  paymentType?: "cash" | "online" | "cash_upi" | "app_online";
 }
 
 export interface FuelEntry {
@@ -50,14 +53,13 @@ export interface FuelEntry {
   cost: number;
 }
 
-// Enhanced odometer session with datetime support
 export interface OdometerSession {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   startKm: number;
   endKm: number;
-  startTime?: string; // HH:MM
-  endTime?: string; // HH:MM
+  startTime?: string;
+  endTime?: string;
 }
 
 /** @deprecated use OdometerSession */
@@ -74,7 +76,7 @@ export interface PlatformCommission {
 
 export interface Settings {
   driverName: string;
-  vehicleType: "Bike" | "Car" | "Auto" | "Other";
+  vehicleType: "Bike" | "Car" | "Auto" | "Toto" | "Other";
   city: string;
   profilePicture: string;
   dailyTarget: number;
@@ -82,6 +84,20 @@ export interface Settings {
   language: "en" | "bn" | "hi";
   currency: "INR" | "BDT" | "USD";
   platformCommissions: Record<Platform, PlatformCommission>;
+}
+
+export interface ShiftData {
+  date: string;
+  active: boolean;
+  startTime: string;
+  startKm: number;
+  endTime?: string;
+  endKm?: number;
+}
+
+export interface PersonalRun {
+  date: string;
+  km: number;
 }
 
 const defaultSettings: Settings = {
@@ -118,7 +134,6 @@ function saveToStorage<T>(key: string, value: T) {
   } catch {}
 }
 
-/** Migrate old DailyOdometer[] to OdometerSession[] */
 function migrateOdometers(raw: unknown[]): OdometerSession[] {
   return raw.map((item) => {
     const d = item as Record<string, unknown>;
@@ -133,6 +148,10 @@ function migrateOdometers(raw: unknown[]): OdometerSession[] {
   });
 }
 
+export function generateRideId(dateStr: string): string {
+  return `RIDE_${dateStr.replace(/-/g, "")}_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
 interface StoreContextType {
   rides: Ride[];
   fuelEntries: FuelEntry[];
@@ -140,6 +159,12 @@ interface StoreContextType {
   /** @deprecated use odometerSessions */
   dailyOdometers: DailyOdometer[];
   settings: Settings;
+  /** Computed: today's shift (backward-compat) */
+  shiftData: ShiftData | null;
+  /** Full shifts array */
+  shifts: ShiftData[];
+  offDays: string[];
+  personalRuns: PersonalRun[];
   addRide: (ride: Omit<Ride, "id">) => void;
   updateRide: (id: string, ride: Omit<Ride, "id">) => void;
   deleteRide: (id: string) => void;
@@ -165,6 +190,15 @@ interface StoreContextType {
   getTodayFuelCost: () => number;
   getTodayOdometer: () => OdometerSession | undefined;
   getAreaSuggestions: (partial: string) => string[];
+  startShift: (startKm: number, date?: string) => void;
+  endShift: (endKm: number, date?: string) => void;
+  clearShift: () => void;
+  updateShift: (date: string, data: Partial<ShiftData>) => void;
+  deleteShift: (date: string) => void;
+  addOffDay: (date: string) => void;
+  removeOffDay: (date: string) => void;
+  addPersonalRun: (date: string, km: number) => void;
+  removePersonalRun: (date: string) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -194,6 +228,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   });
 
+  // ─── Shifts array (replaces single shiftData) ───
+  const [shifts, setShifts] = useState<ShiftData[]>(() => {
+    const arr = loadFromStorage<ShiftData[]>("biju_shifts", []);
+    // one-time migration of old single biju_shift
+    const old = loadFromStorage<ShiftData | null>("biju_shift", null);
+    if (old?.date && !arr.find((s) => s.date === old.date)) {
+      return [...arr, old];
+    }
+    return arr;
+  });
+
+  const [offDays, setOffDays] = useState<string[]>(() =>
+    loadFromStorage("biju_offdays", []),
+  );
+  const [personalRuns, setPersonalRuns] = useState<PersonalRun[]>(() =>
+    loadFromStorage("biju_personalruns", []),
+  );
+
+  // ─── One-time migration: assign ride_id, ride_date, entry_timestamp ───
+  useEffect(() => {
+    const migrated = localStorage.getItem("biju_migrated_rideid_v1");
+    if (migrated) return;
+    setRides((prev) => {
+      let changed = false;
+      const updated = prev.map((r) => {
+        if (r.ride_id && r.ride_date && r.entry_timestamp) return r;
+        changed = true;
+        const rideDate = r.ride_date || r.datetime.slice(0, 10);
+        return {
+          ...r,
+          ride_id: r.ride_id || generateRideId(rideDate),
+          ride_date: rideDate,
+          entry_timestamp: r.entry_timestamp || r.datetime,
+        };
+      });
+      if (changed) saveToStorage("biju_rides", updated);
+      return updated;
+    });
+    localStorage.setItem("biju_migrated_rideid_v1", "1");
+  }, []);
+
   useEffect(() => {
     saveToStorage("biju_rides", rides);
   }, [rides]);
@@ -206,13 +281,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveToStorage("biju_settings", settings);
   }, [settings]);
+  useEffect(() => {
+    saveToStorage("biju_shifts", shifts);
+  }, [shifts]);
+  useEffect(() => {
+    saveToStorage("biju_offdays", offDays);
+  }, [offDays]);
+  useEffect(() => {
+    saveToStorage("biju_personalruns", personalRuns);
+  }, [personalRuns]);
+
+  // Computed backward-compat: today's shift
+  const today = getISTDateString();
+  const shiftData = shifts.find((s) => s.date === today) ?? null;
 
   const addRide = useCallback((ride: Omit<Ride, "id">) => {
-    setRides((prev) => [{ ...ride, id: crypto.randomUUID() }, ...prev]);
+    const rideDate = ride.ride_date || ride.datetime.slice(0, 10);
+    const newRide: Ride = {
+      ...ride,
+      id: crypto.randomUUID(),
+      ride_id: ride.ride_id || generateRideId(rideDate),
+      ride_date: rideDate,
+      entry_timestamp: ride.entry_timestamp || new Date().toISOString(),
+    };
+    setRides((prev) => [newRide, ...prev]);
   }, []);
 
   const updateRide = useCallback((id: string, ride: Omit<Ride, "id">) => {
-    setRides((prev) => prev.map((r) => (r.id === id ? { ...ride, id } : r)));
+    setRides((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const rideDate = ride.ride_date || ride.datetime.slice(0, 10);
+        return {
+          ...ride,
+          id,
+          ride_id: r.ride_id || generateRideId(rideDate),
+          ride_date: rideDate,
+          entry_timestamp: r.entry_timestamp || new Date().toISOString(),
+        };
+      }),
+    );
   }, []);
 
   const deleteRide = useCallback((id: string) => {
@@ -311,19 +419,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const getTodayRides = useCallback(() => {
-    const today = getISTDateString();
-    return rides.filter((r) => r.datetime.startsWith(today));
+    const todayStr = getISTDateString();
+    return rides.filter((r) => {
+      const rDate = r.ride_date || r.datetime.slice(0, 10);
+      return rDate === todayStr;
+    });
   }, [rides]);
 
   const getTodayFuelCost = useCallback(() => {
-    const today = getISTDateString();
-    const todayFuel = fuelEntries.filter((f) => f.date.startsWith(today));
-    return todayFuel.reduce((sum, f) => sum + f.cost, 0);
+    const todayStr = getISTDateString();
+    return fuelEntries
+      .filter((f) => f.date.startsWith(todayStr))
+      .reduce((sum, f) => sum + f.cost, 0);
   }, [fuelEntries]);
 
   const getTodayOdometer = useCallback(() => {
-    const today = getISTDateString();
-    return odometerSessions.find((d) => d.date === today);
+    const todayStr = getISTDateString();
+    return odometerSessions.find((d) => d.date === todayStr);
   }, [odometerSessions]);
 
   const getAreaSuggestions = useCallback(
@@ -342,7 +454,152 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [rides],
   );
 
-  // Backward-compat dailyOdometers view
+  const startShift = useCallback((startKm: number, date?: string) => {
+    const now = new Date().toISOString();
+    const shiftDate = date || getISTDateString();
+    setShifts((prev) => {
+      const existing = prev.find((s) => s.date === shiftDate);
+      if (existing) {
+        return prev.map((s) =>
+          s.date === shiftDate
+            ? {
+                ...s,
+                active: true,
+                startTime: now,
+                startKm,
+                endKm: undefined,
+                endTime: undefined,
+              }
+            : s,
+        );
+      }
+      return [
+        ...prev,
+        { date: shiftDate, active: true, startTime: now, startKm },
+      ];
+    });
+  }, []);
+
+  const endShift = useCallback((endKm: number, date?: string) => {
+    const shiftDate = date || getISTDateString();
+    setShifts((prev) =>
+      prev.map((s) => {
+        if (s.date !== shiftDate) return s;
+        const updated = {
+          ...s,
+          active: false,
+          endTime: new Date().toISOString(),
+          endKm,
+        };
+        // sync to odometerSessions
+        if (s.startKm && endKm > 0) {
+          setOdometerSessions((sessions) => {
+            const existing = sessions.find((os) => os.date === shiftDate);
+            if (existing) {
+              return sessions.map((os) =>
+                os.date === shiftDate
+                  ? { ...os, startKm: s.startKm!, endKm }
+                  : os,
+              );
+            }
+            return [
+              ...sessions,
+              {
+                id: crypto.randomUUID(),
+                date: shiftDate,
+                startKm: s.startKm!,
+                endKm,
+              },
+            ];
+          });
+        }
+        return updated;
+      }),
+    );
+  }, []);
+
+  // no-op for compat; use deleteShift to clear a specific date's shift
+  const clearShift = useCallback(() => {}, []);
+
+  // BUG 1 FIX: synchronously write to storage inside functional updaters
+  const updateShift = useCallback((date: string, data: Partial<ShiftData>) => {
+    setShifts((prev) => {
+      const next = prev.map((s) => (s.date === date ? { ...s, ...data } : s));
+      saveToStorage("biju_shifts", next);
+      return next;
+    });
+    if (data.startKm !== undefined || data.endKm !== undefined) {
+      setOdometerSessions((prev) => {
+        const existing = prev.find((s) => s.date === date);
+        if (!existing) return prev;
+        const next = prev.map((s) =>
+          s.date === date
+            ? {
+                ...s,
+                ...(data.startKm !== undefined
+                  ? { startKm: data.startKm }
+                  : {}),
+                ...(data.endKm !== undefined ? { endKm: data.endKm } : {}),
+              }
+            : s,
+        );
+        saveToStorage("biju_odometers", next);
+        return next;
+      });
+    }
+  }, []);
+
+  const deleteShift = useCallback((date: string) => {
+    setShifts((prev) => {
+      const next = prev.filter((s) => s.date !== date);
+      saveToStorage("biju_shifts", next);
+      return next;
+    });
+    setOdometerSessions((prev) => {
+      const next = prev.filter((s) => s.date !== date);
+      saveToStorage("biju_odometers", next);
+      return next;
+    });
+    // Fix: also clear old single-key shift so migration doesn't re-add it on reload
+    const oldShift = loadFromStorage<{ date?: string } | null>(
+      "biju_shift",
+      null,
+    );
+    if (oldShift?.date === date) {
+      localStorage.removeItem("biju_shift");
+    }
+    // Also remove personalRun and offDay for this date synchronously
+    setPersonalRuns((prev) => {
+      const next = prev.filter((p) => p.date !== date);
+      saveToStorage("biju_personalruns", next);
+      return next;
+    });
+    setOffDays((prev) => {
+      const next = prev.filter((d) => d !== date);
+      saveToStorage("biju_offdays", next);
+      return next;
+    });
+  }, []);
+
+  const addOffDay = useCallback((date: string) => {
+    setOffDays((prev) => (prev.includes(date) ? prev : [...prev, date]));
+  }, []);
+
+  const removeOffDay = useCallback((date: string) => {
+    setOffDays((prev) => prev.filter((d) => d !== date));
+  }, []);
+
+  const addPersonalRun = useCallback((date: string, km: number) => {
+    setPersonalRuns((prev) => {
+      const filtered = prev.filter((p) => p.date !== date);
+      return [...filtered, { date, km }];
+    });
+  }, []);
+
+  const removePersonalRun = useCallback((date: string) => {
+    setPersonalRuns((prev) => prev.filter((p) => p.date !== date));
+  }, []);
+
   const dailyOdometers: DailyOdometer[] = odometerSessions.map((s) => ({
     date: s.date,
     startKm: s.startKm,
@@ -355,6 +612,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     odometerSessions,
     dailyOdometers,
     settings,
+    shiftData,
+    shifts,
+    offDays,
+    personalRuns,
     addRide,
     updateRide,
     deleteRide,
@@ -371,6 +632,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getTodayFuelCost,
     getTodayOdometer,
     getAreaSuggestions,
+    startShift,
+    endShift,
+    clearShift,
+    updateShift,
+    deleteShift,
+    addOffDay,
+    removeOffDay,
+    addPersonalRun,
+    removePersonalRun,
   };
 
   return createElement(StoreContext.Provider, { value }, children);
@@ -382,21 +652,18 @@ export function useStore(): StoreContextType {
   return ctx;
 }
 
-/** Get current date string in IST (YYYY-MM-DD) */
 export function getISTDateString(d?: Date): string {
   const date = d || new Date();
   const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().slice(0, 10);
 }
 
-/** Get current datetime string in IST for input[type=datetime-local] */
 export function getISTDatetimeLocal(d?: Date): string {
   const date = d || new Date();
   const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().slice(0, 16);
 }
 
-/** Format IST date for display: "11 Mar 2026" */
 export function formatISTDate(dateStr: string): string {
   const months = [
     "Jan",

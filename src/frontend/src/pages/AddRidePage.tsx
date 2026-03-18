@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,17 +18,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mic, MicOff, Save } from "lucide-react";
+import { Mic, MicOff, Save, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import Header from "../components/Header";
+import QuickRideModal from "../components/QuickRideModal";
 import { getTranslations } from "../i18n";
+import { calcRunKm } from "../store/kmUtils";
 import {
   PLATFORMS,
   type Platform,
+  type Ride,
   getISTDateString,
-  getISTDatetimeLocal,
   useStore,
 } from "../store/useStore";
 import { useSound } from "../utils/useSound";
@@ -49,19 +61,7 @@ interface SpeechRecognition extends EventTarget {
 declare const SpeechRecognition: { new (): SpeechRecognition };
 
 interface AddRidePageProps {
-  editRide?: {
-    id: string;
-    platform: Platform;
-    fare: number;
-    commission: number;
-    tips: number;
-    distance: number;
-    pickupArea: string;
-    dropArea: string;
-    datetime: string;
-    netIncome: number;
-    paymentType?: "cash" | "online";
-  } | null;
+  editRide?: Ride | null;
   onSaved?: () => void;
   onAvatarClick?: () => void;
   onTargetReached?: () => void;
@@ -78,6 +78,7 @@ export default function AddRidePage({
     updateRide,
     settings,
     rides,
+    odometerSessions,
     getAreaSuggestions,
     formatAmount,
   } = useStore();
@@ -87,8 +88,16 @@ export default function AddRidePage({
   const [platform, setPlatform] = useState<Platform>(
     editRide?.platform || "Uber",
   );
-  const [paymentType, setPaymentType] = useState<"cash" | "online">(
-    editRide?.paymentType || "cash",
+  const [paymentType, setPaymentType] = useState<"cash_upi" | "app_online">(
+    () => {
+      if (!editRide?.paymentType) return "cash_upi";
+      if (
+        editRide.paymentType === "cash" ||
+        editRide.paymentType === "cash_upi"
+      )
+        return "cash_upi";
+      return "app_online";
+    },
   );
   const [fare, setFare] = useState(editRide ? String(editRide.fare) : "");
   const [commission, setCommission] = useState(
@@ -101,14 +110,33 @@ export default function AddRidePage({
   );
   const [pickupArea, setPickupArea] = useState(editRide?.pickupArea || "");
   const [dropArea, setDropArea] = useState(editRide?.dropArea || "");
-  const [date, setDate] = useState(
-    editRide ? editRide.datetime.slice(0, 16) : getISTDatetimeLocal(),
-  );
+
+  // Separate ride date and time
+  const [rideDate, setRideDate] = useState(() => {
+    if (editRide?.ride_date) return editRide.ride_date;
+    if (editRide?.datetime) return editRide.datetime.slice(0, 10);
+    return getISTDateString();
+  });
+  const [rideTime, setRideTime] = useState(() => {
+    if (editRide?.datetime) {
+      const d = new Date(editRide.datetime);
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
   const [pickupSuggestions, setPickupSuggestions] = useState<string[]>([]);
   const [dropSuggestions, setDropSuggestions] = useState<string[]>([]);
   const [showPickupSugg, setShowPickupSugg] = useState(false);
   const [showDropSugg, setShowDropSugg] = useState(false);
   const [listening, setListening] = useState(false);
+  const [quickRideOpen, setQuickRideOpen] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [showKmWarning, setShowKmWarning] = useState(false);
+  const pendingRideDataRef = useRef<Omit<Ride, "id"> | null>(null);
   const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(
     null,
   );
@@ -124,10 +152,10 @@ export default function AddRidePage({
     else setCommission("");
   }, [platform, fare, settings.platformCommissions, editRide]);
 
-  // Auto-calculate tips/netIncome based on payment type (Cash only)
+  // Auto-calculate tips/netIncome based on payment type (Cash/UPI only)
   const handleCustomerPaidChange = (val: string) => {
     setCustomerPaid(val);
-    if (paymentType === "cash") {
+    if (paymentType === "cash_upi") {
       const paid = Number.parseFloat(val) || 0;
       if (paid > 0) {
         const fareNum = Number.parseFloat(fare) || 0;
@@ -144,7 +172,7 @@ export default function AddRidePage({
 
   // Net income varies by payment type
   const netIncome =
-    paymentType === "cash" && customerPaidNum > 0
+    paymentType === "cash_upi" && customerPaidNum > 0
       ? customerPaidNum - commissionNum
       : fareNum - commissionNum + tipsNum;
 
@@ -162,12 +190,10 @@ export default function AddRidePage({
     setShowDropSugg(sugg.length > 0 && val.length > 0);
   };
 
-  const handleSave = () => {
-    if (!fare || fareNum <= 0) {
-      toast.error("Please enter a valid fare");
-      return;
-    }
-    const rideData = {
+  const buildRideData = (): Omit<Ride, "id"> => {
+    const timeStr = rideTime || "00:00";
+    const datetime = new Date(`${rideDate}T${timeStr}:00+05:30`).toISOString();
+    return {
       platform,
       fare: fareNum,
       commission: commissionNum,
@@ -175,10 +201,26 @@ export default function AddRidePage({
       distance: Number.parseFloat(distance) || 0,
       pickupArea,
       dropArea,
-      datetime: new Date(date).toISOString(),
+      datetime,
       netIncome,
       paymentType,
+      ride_date: rideDate,
+      entry_timestamp: new Date().toISOString(),
     };
+  };
+
+  const checkDuplicate = (rideData: Omit<Ride, "id">): boolean => {
+    if (editRide) return false; // Skip check when editing
+    return rides.some(
+      (r) =>
+        r.fare === rideData.fare &&
+        r.distance === rideData.distance &&
+        r.platform === rideData.platform &&
+        (r.ride_date || r.datetime.slice(0, 10)) === rideData.ride_date,
+    );
+  };
+
+  const commitSave = (rideData: Omit<Ride, "id">) => {
     if (editRide) {
       updateRide(editRide.id, rideData);
       toast.success("Ride updated!");
@@ -194,7 +236,9 @@ export default function AddRidePage({
         const todayStr = getISTDateString();
         const todayTotal =
           rides
-            .filter((r) => r.datetime.startsWith(todayStr))
+            .filter(
+              (r) => (r.ride_date || r.datetime.slice(0, 10)) === todayStr,
+            )
             .reduce((sum, r) => sum + r.netIncome, 0) + netIncome;
         if (todayTotal >= settings.dailyTarget && settings.dailyTarget > 0) {
           localStorage.setItem(todayKey, "1");
@@ -203,7 +247,7 @@ export default function AddRidePage({
       }
 
       setPlatform("Uber");
-      setPaymentType("cash");
+      setPaymentType("cash_upi");
       setFare("");
       setCommission("");
       setTips("");
@@ -211,9 +255,43 @@ export default function AddRidePage({
       setDistance("");
       setPickupArea("");
       setDropArea("");
-      setDate(getISTDatetimeLocal());
+      setRideDate(getISTDateString());
+      const now = new Date();
+      setRideTime(
+        `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+      );
     }
     onSaved?.();
+  };
+
+  const handleSave = () => {
+    if (!fare || fareNum <= 0) {
+      toast.error("Please enter a valid fare");
+      return;
+    }
+    const rideData = buildRideData();
+    // KM validation: warn if total Ride KM exceeds Run KM from odometer for the selected ride date
+    const rideDateOdoSession = odometerSessions.find(
+      (s) => s.date === rideDate,
+    );
+    const rideDateRunKm = rideDateOdoSession
+      ? calcRunKm(rideDateOdoSession.startKm, rideDateOdoSession.endKm)
+      : 0;
+    const existingRideKm = rides
+      .filter((r) => (r.ride_date || r.datetime.slice(0, 10)) === rideDate)
+      .reduce((s, r) => s + r.distance, 0);
+    const newRideKm = Number.parseFloat(distance) || 0;
+    if (rideDateRunKm > 0 && existingRideKm + newRideKm > rideDateRunKm) {
+      pendingRideDataRef.current = rideData;
+      setShowKmWarning(true);
+      return;
+    }
+    if (checkDuplicate(rideData)) {
+      pendingRideDataRef.current = rideData;
+      setShowDuplicateDialog(true);
+      return;
+    }
+    commitSave(rideData);
   };
 
   const startVoice = useCallback(() => {
@@ -272,6 +350,19 @@ export default function AddRidePage({
     <div className="flex flex-col min-h-screen pb-20">
       <Header title={t.addRide.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4">
+        {/* Quick Ride Button */}
+        <Button
+          data-ocid="addride.quickride.button"
+          className="w-full h-12 rounded-xl font-bold gap-2 text-white mb-4"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.52 0.17 47) 0%, oklch(0.62 0.19 47) 100%)",
+          }}
+          onClick={() => setQuickRideOpen(true)}
+        >
+          <Zap size={18} />
+          QUICK RIDE
+        </Button>
         {/* Voice Button */}
         <div className="flex justify-end mb-3">
           <Button
@@ -331,43 +422,43 @@ export default function AddRidePage({
               type="button"
               data-ocid="addride.paymenttype.cash"
               onClick={() => {
-                setPaymentType("cash");
+                setPaymentType("cash_upi");
                 setCustomerPaid("");
               }}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
               style={{
                 background:
-                  paymentType === "cash"
+                  paymentType === "cash_upi"
                     ? "oklch(0.58 0.21 264)"
                     : "oklch(var(--muted))",
                 color:
-                  paymentType === "cash"
+                  paymentType === "cash_upi"
                     ? "white"
                     : "oklch(var(--muted-foreground))",
               }}
             >
-              💵 Cash
+              💵 Cash / UPI
             </button>
             <button
               type="button"
               data-ocid="addride.paymenttype.online"
               onClick={() => {
-                setPaymentType("online");
+                setPaymentType("app_online");
                 setCustomerPaid("");
               }}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
               style={{
                 background:
-                  paymentType === "online"
+                  paymentType === "app_online"
                     ? "oklch(0.58 0.21 264)"
                     : "oklch(var(--muted))",
                 color:
-                  paymentType === "online"
+                  paymentType === "app_online"
                     ? "white"
                     : "oklch(var(--muted-foreground))",
               }}
             >
-              📱 Online
+              📱 App Online
             </button>
           </div>
         </div>
@@ -397,44 +488,50 @@ export default function AddRidePage({
           {/* Fare + Commission + Tips row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">{t.addRide.fare}</Label>
+              <Label className="font-semibold text-xs text-foreground block mb-1">
+                {t.addRide.fare}
+              </Label>
               <Input
                 data-ocid="addride.fare.input"
                 type="number"
                 placeholder="120"
                 value={fare}
                 onChange={(e) => setFare(e.target.value)}
-                className="mt-1 h-12 text-base"
+                className="h-12 text-base"
                 autoFocus
               />
             </div>
             <div>
-              <Label className="text-xs">{t.addRide.commission}</Label>
+              <Label className="font-semibold text-xs text-foreground block mb-1">
+                {t.addRide.commission}
+              </Label>
               <Input
                 data-ocid="addride.commission.input"
                 type="number"
-                placeholder="Auto-calc"
+                placeholder="Auto"
                 value={commission}
                 onChange={(e) => setCommission(e.target.value)}
-                className="mt-1 h-12 text-base"
+                className="h-12 text-base"
               />
             </div>
             <div>
-              <Label className="text-xs">{t.addRide.tips}</Label>
+              <Label className="font-semibold text-xs text-foreground block mb-1">
+                {t.addRide.tips}
+              </Label>
               <Input
                 data-ocid="addride.tips.input"
                 type="number"
-                placeholder={paymentType === "online" ? "Enter tips" : "Auto"}
+                placeholder={paymentType === "app_online" ? "Tip" : "Auto"}
                 value={tips}
                 onChange={(e) => setTips(e.target.value)}
-                className="mt-1 h-12 text-base"
-                readOnly={paymentType === "cash" && customerPaid !== ""}
+                className="h-12 text-base"
+                readOnly={paymentType === "cash_upi" && customerPaid !== ""}
               />
             </div>
           </div>
 
-          {/* Customer Paid — visible for Cash only */}
-          {paymentType === "cash" && (
+          {/* Customer Paid — visible for Cash/UPI only */}
+          {paymentType === "cash_upi" && (
             <div>
               <Label className="text-xs">Customer Paid (₹)</Label>
               <Input
@@ -445,13 +542,11 @@ export default function AddRidePage({
                 onChange={(e) => handleCustomerPaidChange(e.target.value)}
                 className="mt-1 h-12 text-base"
               />
-              {paymentType === "cash" && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {customerPaidNum > 0
-                    ? `Tip: ${formatAmount(tipsNum)} · Net: ${formatAmount(netIncome)}`
-                    : "Enter amount customer handed you"}
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {customerPaidNum > 0
+                  ? `Tip: ${formatAmount(tipsNum)} · Net: ${formatAmount(netIncome)}`
+                  : "Enter amount customer handed you"}
+              </p>
             </div>
           )}
 
@@ -531,15 +626,28 @@ export default function AddRidePage({
             )}
           </div>
 
-          <div>
-            <Label className="text-xs">{t.addRide.date}</Label>
-            <Input
-              data-ocid="addride.datetime.input"
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 h-12 text-base"
-            />
+          {/* Ride Date and Time — split fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs block mb-1">Ride Date</Label>
+              <Input
+                data-ocid="addride.ridedate.input"
+                type="date"
+                value={rideDate}
+                onChange={(e) => setRideDate(e.target.value)}
+                className="h-12 text-base"
+              />
+            </div>
+            <div>
+              <Label className="text-xs block mb-1">Ride Time (optional)</Label>
+              <Input
+                data-ocid="addride.ridetime.input"
+                type="time"
+                value={rideTime}
+                onChange={(e) => setRideTime(e.target.value)}
+                className="h-12 text-base"
+              />
+            </div>
           </div>
         </div>
 
@@ -556,6 +664,92 @@ export default function AddRidePage({
           <Save size={20} />
           {editRide ? "Update Ride" : t.addRide.saveRide}
         </Button>
+        <QuickRideModal
+          open={quickRideOpen}
+          onClose={() => setQuickRideOpen(false)}
+        />
+
+        {/* KM Warning Dialog */}
+        <AlertDialog open={showKmWarning} onOpenChange={setShowKmWarning}>
+          <AlertDialogContent data-ocid="addride.kmwarning.dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Ride KM Exceeds Run KM</AlertDialogTitle>
+              <AlertDialogDescription>
+                Today&apos;s total Ride KM exceeds the Run KM recorded from the
+                odometer. This may indicate unrealistic data. Save anyway?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                data-ocid="addride.kmwarning.cancel_button"
+                onClick={() => {
+                  setShowKmWarning(false);
+                  pendingRideDataRef.current = null;
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                data-ocid="addride.kmwarning.confirm_button"
+                onClick={() => {
+                  if (pendingRideDataRef.current) {
+                    const rideData = pendingRideDataRef.current;
+                    pendingRideDataRef.current = null;
+                    setShowKmWarning(false);
+                    if (checkDuplicate(rideData)) {
+                      pendingRideDataRef.current = rideData;
+                      setShowDuplicateDialog(true);
+                      return;
+                    }
+                    commitSave(rideData);
+                  }
+                  setShowKmWarning(false);
+                }}
+              >
+                Save Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Duplicate Detection Dialog */}
+        <AlertDialog
+          open={showDuplicateDialog}
+          onOpenChange={setShowDuplicateDialog}
+        >
+          <AlertDialogContent data-ocid="addride.duplicate.dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Possible Duplicate Ride</AlertDialogTitle>
+              <AlertDialogDescription>
+                A ride with the same fare, distance, platform, and date already
+                exists. Save anyway?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                data-ocid="addride.duplicate.cancel_button"
+                onClick={() => {
+                  setShowDuplicateDialog(false);
+                  pendingRideDataRef.current = null;
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                data-ocid="addride.duplicate.confirm_button"
+                onClick={() => {
+                  if (pendingRideDataRef.current) {
+                    commitSave(pendingRideDataRef.current);
+                    pendingRideDataRef.current = null;
+                  }
+                  setShowDuplicateDialog(false);
+                }}
+              >
+                Save Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

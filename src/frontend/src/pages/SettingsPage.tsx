@@ -1,4 +1,3 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Camera } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
@@ -34,11 +32,7 @@ export default function SettingsPage({
 }: SettingsPageProps) {
   const { settings, updateSettings } = useStore();
   const t = getTranslations(settings.language);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [driverName, setDriverName] = useState(settings.driverName);
-  const [vehicleType, setVehicleType] = useState(settings.vehicleType);
-  const [city, setCity] = useState(settings.city);
   const [dailyTarget, setDailyTarget] = useState(String(settings.dailyTarget));
   const [fuelPrice, setFuelPrice] = useState(
     String(settings.fuelPricePerLitre),
@@ -49,31 +43,20 @@ export default function SettingsPage({
   const [soundEnabled, setSoundEnabled] = useState(() => {
     return localStorage.getItem("biju_sound_enabled") !== "false";
   });
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem("biju_notifications") !== "false";
+  });
   const [selectedCommissionPlatform, setSelectedCommissionPlatform] = useState<
     Platform | ""
   >("");
 
   const handleSave = () => {
     updateSettings({
-      driverName,
-      vehicleType: vehicleType as "Bike" | "Car" | "Auto" | "Other",
-      city,
       dailyTarget: Number.parseFloat(dailyTarget) || 1000,
       fuelPricePerLitre: Number.parseFloat(fuelPrice) || 105,
       platformCommissions,
     });
     toast.success("Settings saved!");
-  };
-
-  const handlePicture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string;
-      updateSettings({ profilePicture: result });
-    };
-    reader.readAsDataURL(file);
   };
 
   const updateCommission = (
@@ -94,106 +77,6 @@ export default function SettingsPage({
     <div className="flex flex-col min-h-screen pb-20">
       <Header title={t.settings.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 py-4 space-y-4">
-        {/* Driver Profile */}
-        <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-4">
-            {t.settings.profile}
-          </h3>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative">
-              <Avatar className="w-16 h-16">
-                <AvatarImage src={settings.profilePicture || undefined} />
-                <AvatarFallback
-                  className="text-xl font-bold"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
-                    color: "white",
-                  }}
-                >
-                  {(driverName || "DR").slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <button
-                type="button"
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center shadow-md"
-                onClick={() => fileInputRef.current?.click()}
-                data-ocid="settings.upload_button"
-              >
-                <Camera size={13} className="text-white" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePicture}
-                data-ocid="settings.photo.input"
-              />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold">{driverName || "Driver"}</p>
-              <p className="text-sm text-muted-foreground">
-                {vehicleType} · {city || "City not set"}
-              </p>
-              <button
-                type="button"
-                className="mt-1 text-xs font-medium underline"
-                style={{ color: "oklch(0.72 0.19 47)" }}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Upload Photo
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <Label>{t.settings.driverName}</Label>
-              <Input
-                data-ocid="settings.drivername.input"
-                value={driverName}
-                onChange={(e) => setDriverName(e.target.value)}
-                className="mt-1"
-                placeholder="Your name"
-              />
-            </div>
-            <div>
-              <Label>{t.settings.vehicleType}</Label>
-              <Select
-                value={vehicleType}
-                onValueChange={(v) =>
-                  setVehicleType(v as "Bike" | "Car" | "Auto" | "Other")
-                }
-              >
-                <SelectTrigger
-                  data-ocid="settings.vehicle.select"
-                  className="mt-1"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["Bike", "Car", "Auto", "Other"].map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t.settings.city}</Label>
-              <Input
-                data-ocid="settings.city.input"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="mt-1"
-                placeholder="Your city"
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Daily Target */}
         <div className="rounded-2xl bg-card border border-border p-4">
           <Label className="font-semibold font-display">
@@ -440,7 +323,7 @@ export default function SettingsPage({
           </div>
 
           {/* Sound */}
-          <div>
+          <div className="mb-4">
             <Label className="text-sm font-medium mb-2 block">App Sound</Label>
             <div className="flex gap-2" data-ocid="settings.sound.toggle">
               {(["on", "off"] as const).map((s) => {
@@ -470,6 +353,30 @@ export default function SettingsPage({
                 );
               })}
             </div>
+          </div>
+
+          {/* Notifications */}
+          <div className="flex items-center justify-between py-2 border-t border-border">
+            <div>
+              <p className="font-medium text-sm">In-App Notifications</p>
+              <p className="text-xs text-muted-foreground">
+                Low earnings, fuel, blank KM alerts
+              </p>
+            </div>
+            <button
+              type="button"
+              data-ocid="settings.notifications.toggle"
+              onClick={() => {
+                const newVal = !notificationsEnabled;
+                setNotificationsEnabled(newVal);
+                localStorage.setItem("biju_notifications", String(newVal));
+              }}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${notificationsEnabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${notificationsEnabled ? "translate-x-6" : ""}`}
+              />
+            </button>
           </div>
         </div>
 

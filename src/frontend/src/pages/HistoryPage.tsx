@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +52,16 @@ export default function HistoryPage({
   onEditRide,
   onAvatarClick,
 }: HistoryPageProps) {
-  const { rides, odometerSessions, settings, formatAmount } = useStore();
+  const {
+    rides,
+    odometerSessions,
+    settings,
+    formatAmount,
+    deleteRide,
+    offDays,
+    personalRuns,
+    shifts,
+  } = useStore();
   const t = getTranslations(settings.language);
 
   const [search, setSearch] = useState("");
@@ -53,6 +72,7 @@ export default function HistoryPage({
   const [filterMaxFare, setFilterMaxFare] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return rides.filter((r) => {
@@ -64,7 +84,7 @@ export default function HistoryPage({
         r.dropArea.toLowerCase().includes(q);
       const matchPlatform =
         filterPlatform === "all" || r.platform === filterPlatform;
-      const rDate = r.datetime.slice(0, 10);
+      const rDate = r.ride_date || r.datetime.slice(0, 10);
       const matchDateFrom = !filterDateFrom || rDate >= filterDateFrom;
       const matchDateTo = !filterDateTo || rDate <= filterDateTo;
       const matchMinFare =
@@ -90,16 +110,41 @@ export default function HistoryPage({
     filterMaxFare,
   ]);
 
+  // ─── Include all dates from all sources, not just those with rides ───
   const grouped = useMemo(() => {
-    const map = new Map<string, Ride[]>();
-    for (const r of filtered) {
-      const date = r.datetime.slice(0, 10);
-      const arr = map.get(date) || [];
-      arr.push(r);
-      map.set(date, arr);
-    }
-    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+    const dateSet = new Set<string>();
+    for (const r of filtered)
+      dateSet.add(r.ride_date || r.datetime.slice(0, 10));
+    for (const s of odometerSessions) dateSet.add(s.date);
+    for (const d of offDays) dateSet.add(d);
+    for (const p of personalRuns) dateSet.add(p.date);
+    for (const s of shifts) dateSet.add(s.date);
+
+    // apply date-range filter to non-ride dates
+    return Array.from(dateSet)
+      .filter((date) => {
+        if (filterDateFrom && date < filterDateFrom) return false;
+        if (filterDateTo && date > filterDateTo) return false;
+        return true;
+      })
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => {
+        const dayRides = filtered.filter(
+          (r) => (r.ride_date || r.datetime.slice(0, 10)) === date,
+        );
+        return [date, dayRides] as [string, typeof filtered];
+      });
+  }, [
+    filtered,
+    odometerSessions,
+    offDays,
+    personalRuns,
+    shifts,
+    filterDateFrom,
+    filterDateTo,
+  ]);
+
+  const hasAnyData = grouped.length > 0;
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
@@ -223,7 +268,7 @@ export default function HistoryPage({
         </div>
 
         {/* Ride List */}
-        {filtered.length === 0 ? (
+        {!hasAnyData ? (
           <div
             data-ocid="history.empty_state"
             className="flex flex-col items-center justify-center py-16 text-center"
@@ -236,66 +281,108 @@ export default function HistoryPage({
             {grouped.map(([date, dayRides], groupIdx) => {
               const dayIncome = dayRides.reduce((s, r) => s + r.netIncome, 0);
               const rideKm = calcRideKm(dayRides);
-
-              // Look up odometer session for this date
               const odoSession = odometerSessions.find((s) => s.date === date);
+              const shiftForDate = shifts.find((s) => s.date === date);
               const runKm = odoSession
                 ? calcRunKm(odoSession.startKm, odoSession.endKm)
-                : null;
+                : shiftForDate?.startKm && shiftForDate?.endKm
+                  ? calcRunKm(shiftForDate.startKm, shiftForDate.endKm)
+                  : null;
               const blankKm =
                 runKm !== null ? calcBlankKm(runKm, rideKm) : null;
+              const isOffDayDate = offDays.includes(date);
+              const personalRunEntry = personalRuns.find(
+                (p) => p.date === date,
+              );
+              const shiftEntry = shifts.find((s) => s.date === date);
 
               return (
                 <div key={date}>
-                  {/* Date group header — expanded with all 5 stats */}
-                  <div
-                    className="px-3 py-2.5 rounded-xl mb-2"
-                    style={{ background: "oklch(0.58 0.21 264 / 0.10)" }}
-                  >
-                    {/* Top row: date + total income */}
+                  {/* Date group header */}
+                  <div className="px-3 py-2.5 rounded-xl mb-2 bg-muted/60 dark:bg-muted/40">
                     <div className="flex items-center justify-between mb-2">
-                      <p
-                        className="text-xs font-bold"
-                        style={{ color: "oklch(0.72 0.18 264)" }}
-                      >
+                      <p className="text-xs font-bold text-foreground">
                         {formatISTDate(date)}
                       </p>
-                      <p
-                        className="text-sm font-bold"
-                        style={{ color: "oklch(0.72 0.19 47)" }}
-                      >
+                      <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
                         {formatAmount(dayIncome)}
                       </p>
                     </div>
 
-                    {/* Stats pills grid */}
+                    {/* Status badges */}
+                    {(isOffDayDate ||
+                      personalRunEntry ||
+                      shiftEntry ||
+                      odoSession) && (
+                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+                        {isOffDayDate && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            🛌 Off Day
+                          </span>
+                        )}
+                        {personalRunEntry && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            🚗 Personal Run {personalRunEntry.km}km
+                          </span>
+                        )}
+                        {/* BUG 3 FIX: unified shift KM badge covering both old odometerSessions and new shifts */}
+                        {(() => {
+                          const startKm =
+                            shiftEntry?.startKm ?? odoSession?.startKm;
+                          const endKm = shiftEntry?.endKm ?? odoSession?.endKm;
+                          const isActive = shiftEntry?.active;
+                          if (startKm && endKm && !isActive) {
+                            return (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                ✅ Shift KM: {startKm} → {endKm}
+                              </span>
+                            );
+                          }
+                          if (isActive && startKm) {
+                            return (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                ⚡ Shift Active (Start: {startKm} km)
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Stats pills */}
                     <div className="flex flex-wrap gap-1.5">
                       <DayStat
                         label="Rides"
                         value={String(dayRides.length)}
-                        color="oklch(0.58 0.21 264)"
+                        variant="blue"
                       />
                       <DayStat
                         label="Ride KM"
                         value={`${rideKm.toFixed(1)} km`}
-                        color="oklch(0.65 0.15 142)"
+                        variant="green"
                       />
                       <DayStat
                         label="Run KM"
                         value={runKm !== null ? `${runKm.toFixed(1)} km` : "—"}
-                        color="oklch(0.72 0.18 264)"
+                        variant="blue"
                       />
                       <DayStat
                         label="Blank KM"
                         value={
                           blankKm !== null ? `${blankKm.toFixed(1)} km` : "—"
                         }
-                        color="oklch(0.62 0.22 27)"
+                        variant="orange"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
+                    {dayRides.length === 0 && (
+                      <div className="py-3 px-3 text-xs text-muted-foreground italic">
+                        No rides recorded
+                      </div>
+                    )}
                     {dayRides.map((ride, idx) => {
                       const itemIdx = groupIdx * 100 + idx + 1;
                       const color = PLATFORM_COLORS[ride.platform];
@@ -327,7 +414,7 @@ export default function HistoryPage({
                             <div className="text-right">
                               <p
                                 className="text-sm font-bold"
-                                style={{ color: "oklch(0.65 0.15 142)" }}
+                                style={{ color: "oklch(0.42 0.17 142)" }}
                               >
                                 {formatAmount(ride.netIncome)}
                               </p>
@@ -357,6 +444,32 @@ export default function HistoryPage({
                               Tips: ₹{(ride.tips ?? 0).toFixed(0)}
                             </span>
                           </div>
+
+                          {/* Theme-adaptive edit/delete buttons */}
+                          <div className="flex gap-2 mt-2 pt-2 border-t border-border/50">
+                            <button
+                              type="button"
+                              data-ocid={`history.ride.edit_button.${itemIdx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditRide?.(ride);
+                              }}
+                              className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              type="button"
+                              data-ocid={`history.ride.delete_button.${itemIdx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingDeleteId(ride.id);
+                              }}
+                              className="flex-1 text-xs py-1.5 rounded-lg font-medium transition-colors bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -374,6 +487,41 @@ export default function HistoryPage({
         onClose={() => setSelectedRide(null)}
         onEdit={(r) => onEditRide?.(r)}
       />
+
+      {/* Delete confirmation */}
+      <AlertDialog
+        open={!!pendingDeleteId}
+        onOpenChange={(open) => !open && setPendingDeleteId(null)}
+      >
+        <AlertDialogContent data-ocid="history.ride.delete_dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Ride?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this ride? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-ocid="history.delete.cancel_button"
+              onClick={() => setPendingDeleteId(null)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-ocid="history.delete.confirm_button"
+              onClick={() => {
+                if (pendingDeleteId) {
+                  deleteRide(pendingDeleteId);
+                  setPendingDeleteId(null);
+                }
+              }}
+              style={{ background: "oklch(0.52 0.22 27)", color: "white" }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -381,28 +529,26 @@ export default function HistoryPage({
 function DayStat({
   label,
   value,
-  color,
+  variant = "default",
 }: {
   label: string;
   value: string;
-  color: string;
+  variant?: "blue" | "green" | "orange" | "default";
 }) {
+  const colorClass =
+    variant === "blue"
+      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+      : variant === "green"
+        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+        : variant === "orange"
+          ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+          : "bg-muted text-foreground";
   return (
     <div
-      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
-      style={{
-        background: `${color} / 0.12`,
-        backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`,
-        color,
-      }}
+      className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ${colorClass}`}
     >
-      <span
-        className="text-muted-foreground"
-        style={{ color: "inherit", opacity: 0.7 }}
-      >
-        {label}:
-      </span>
-      <span style={{ color }}>{value}</span>
+      <span className="opacity-70">{label}:</span>
+      <span>{value}</span>
     </div>
   );
 }

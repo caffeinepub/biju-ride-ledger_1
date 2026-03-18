@@ -21,7 +21,17 @@ function shouldShowSplash(): boolean {
 
 function AppInner() {
   const [showSplash, setShowSplash] = useState(shouldShowSplash);
-  const [activeTab, setActiveTab] = useState<TabName>("home");
+  const [activeTab, setActiveTab] = useState<TabName>(() => {
+    const saved = localStorage.getItem("biju_last_tab") as TabName | null;
+    const valid: TabName[] = [
+      "home",
+      "addRide",
+      "history",
+      "reports",
+      "settings",
+    ];
+    return saved && valid.includes(saved) ? saved : "home";
+  });
   const [editingRide, setEditingRide] = useState<Ride | null>(null);
   const [showDriverProfile, setShowDriverProfile] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -35,6 +45,11 @@ function AppInner() {
     localStorage.setItem("biju_theme", appTheme);
   }, [appTheme]);
 
+  const goToTab = (tab: TabName) => {
+    setActiveTab(tab);
+    localStorage.setItem("biju_last_tab", tab);
+  };
+
   const handleSplashComplete = () => {
     sessionStorage.setItem("splashShownAt", String(Date.now()));
     setShowSplash(false);
@@ -42,17 +57,17 @@ function AppInner() {
 
   const handleEditRide = (ride: Ride) => {
     setEditingRide(ride);
-    setActiveTab("addRide");
+    goToTab("addRide");
   };
 
   const handleRideSaved = () => {
     setEditingRide(null);
-    setActiveTab("history");
+    goToTab("history");
   };
 
   const goToSettings = () => {
     setShowDriverProfile(false);
-    setActiveTab("settings");
+    goToTab("settings");
   };
 
   const goToDriverProfile = () => setShowDriverProfile(true);
@@ -104,7 +119,7 @@ function AppInner() {
       <BottomNav
         active={activeTab}
         onTabChange={(tab) => {
-          setActiveTab(tab);
+          goToTab(tab);
           setEditingRide(null);
         }}
       />

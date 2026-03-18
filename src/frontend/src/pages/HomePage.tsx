@@ -1,21 +1,41 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Fuel, Save, Star, Target, TrendingUp, Zap } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Cloud,
+  CloudOff,
+  CloudUpload,
+  Fuel,
+  RefreshCw,
+  Star,
+  Target,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import FuelHistoryModal from "../components/FuelHistoryModal";
 import Header from "../components/Header";
+import ShiftSummaryModal from "../components/ShiftSummaryModal";
 import { getTranslations } from "../i18n";
 import { getSmartRecommendations } from "../store/analytics";
 import { calcBlankKm, calcRideKm, calcRunKm } from "../store/kmUtils";
+import { useSyncManager } from "../store/syncManager";
 import { formatISTDate, getISTDateString, useStore } from "../store/useStore";
+
+const NOTIFICATION_THRESHOLDS = {
+  LOW_EARNINGS_AMOUNT: 300,
+  LOW_EARNINGS_HOUR: 18,
+  HIGH_FUEL_PCT: 0.3,
+  HIGH_BLANK_KM_PCT: 0.3,
+  SHIFT_REMINDER_HOURS: 10,
+};
 
 interface HomePageProps {
   onAvatarClick?: () => void;
 }
 
-/** Best platform from a set of rides: platform with highest avg netIncome per ride */
 function getBestPlatform(rides: import("../store/useStore").Ride[]) {
   if (rides.length < 2) return null;
   const map: Record<string, { total: number; count: number }> = {};
@@ -32,7 +52,6 @@ function getBestPlatform(rides: import("../store/useStore").Ride[]) {
   return best;
 }
 
-/** Best area from a set of rides: area with highest avg netIncome among rides where area = pickup or drop */
 function getBestArea(rides: import("../store/useStore").Ride[]) {
   if (rides.length < 2) return null;
   const map: Record<string, { total: number; count: number }> = {};
@@ -52,6 +71,28 @@ function getBestArea(rides: import("../store/useStore").Ride[]) {
   return best;
 }
 
+function useAnimatedNumber(target: number, duration = 600) {
+  const [display, setDisplay] = useState(target);
+  const prevRef = useRef(target);
+  useEffect(() => {
+    const start = prevRef.current;
+    const diff = target - start;
+    if (diff === 0) return;
+    const startTime = performance.now();
+    let raf: number;
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      setDisplay(start + diff * progress);
+      if (progress < 1) raf = requestAnimationFrame(tick);
+      else prevRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return display;
+}
+
 export default function HomePage({ onAvatarClick }: HomePageProps) {
   const {
     rides,
@@ -60,28 +101,71 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     settings,
     getTodayRides,
     getTodayFuelCost,
-    setDailyOdometer,
     formatAmount,
+    shifts,
+    offDays,
+    personalRuns,
+    startShift,
+    endShift,
+    updateShift,
+    deleteShift,
+    addOffDay,
+    removeOffDay,
+    addPersonalRun,
+    removePersonalRun,
+    getCurrencySymbol,
   } = useStore();
   const t = getTranslations(settings.language);
   const [fuelModalOpen, setFuelModalOpen] = useState(false);
-
-  const today = getISTDateString();
-
-  // ─── Odometer date selector (supports backdating) ───
-  const [odoDate, setOdoDate] = useState(today);
-  const selectedSession = odometerSessions.find((s) => s.date === odoDate);
-  const [startKm, setStartKm] = useState(
-    String(selectedSession?.startKm || ""),
+  const [shiftSummaryOpen, setShiftSummaryOpen] = useState(false);
+  const [showStartShiftPanel, setShowStartShiftPanel] = useState(false);
+  const [showEndShiftPanel, setShowEndShiftPanel] = useState(false);
+  const [shiftStartKm, setShiftStartKm] = useState("");
+  const [shiftEndKm, setShiftEndKm] = useState("");
+  const [personalRunKm, setPersonalRunKm] = useState("");
+  const [showPersonalRunPanel, setShowPersonalRunPanel] = useState(false);
+  const [showDeleteShiftConfirm, setShowDeleteShiftConfirm] = useState(false);
+  const [showEditShiftPanel, setShowEditShiftPanel] = useState(false);
+  const [editStartKm, setEditStartKm] = useState("");
+  const [editEndKm, setEditEndKm] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showKeepGoingPopup, setShowKeepGoingPopup] = useState(false);
+  const [isDark, setIsDark] = useState(() =>
+    document.documentElement.classList.contains("dark"),
   );
-  const [endKm, setEndKm] = useState(String(selectedSession?.endKm || ""));
 
-  // When odoDate changes, load that day's session values
+  // ─── Selected control date (drives all shift operations) ───
+  const [selectedControlDate, setSelectedControlDate] = useState(() =>
+    getISTDateString(),
+  );
+  const today = getISTDateString();
+  const sym = getCurrencySymbol();
+
+  const { syncStatus } = useSyncManager(rides, fuelEntries, odometerSessions);
+
+  // BUG 7 FIX: dynamic greeting based on time of day and driver name
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    const timeGreeting =
+      hour < 12
+        ? "Good Morning"
+        : hour < 17
+          ? "Good Afternoon"
+          : "Good Evening";
+    const name = settings.driverName || "Driver";
+    return `Hello ${name}, ${timeGreeting}`;
+  }, [settings.driverName]);
+
   useEffect(() => {
-    const session = odometerSessions.find((s) => s.date === odoDate);
-    setStartKm(String(session?.startKm || ""));
-    setEndKm(String(session?.endKm || ""));
-  }, [odoDate, odometerSessions]);
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const todayRides = getTodayRides();
   const todayFuelCost = getTodayFuelCost();
@@ -90,13 +174,9 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     () => todayRides.reduce((s, r) => s + r.netIncome, 0),
     [todayRides],
   );
-  const totalRideDistance = useMemo(
-    () => todayRides.reduce((s, r) => s + r.distance, 0),
-    [todayRides],
-  );
   const netProfit = totalIncome - todayFuelCost;
+  const animatedProfit = useAnimatedNumber(netProfit);
 
-  // ─── All-time cumulative totals ───
   const allTimeIncome = useMemo(
     () => rides.reduce((s, r) => s + r.netIncome, 0),
     [rides],
@@ -111,11 +191,6 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     [rides],
   );
 
-  const startKmNum = Number.parseFloat(startKm) || 0;
-  const endKmNum = Number.parseFloat(endKm) || 0;
-  const dayDistance = calcRunKm(startKmNum, endKmNum);
-
-  // Today's run km from today's odometer session
   const todayOdoSession = odometerSessions.find((s) => s.date === today);
   const todayRunKm = todayOdoSession
     ? calcRunKm(todayOdoSession.startKm, todayOdoSession.endKm)
@@ -123,43 +198,307 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
   const todayRideKm = useMemo(() => calcRideKm(todayRides), [todayRides]);
   const todayBlankKm = calcBlankKm(todayRunKm, todayRideKm);
 
-  // Blank km for selected odo date using consistent formula
-  const selectedDateRideKm = useMemo(() => {
-    return calcRideKm(rides.filter((r) => r.datetime.startsWith(odoDate)));
-  }, [rides, odoDate]);
-  const blankKm = calcBlankKm(dayDistance, selectedDateRideKm);
-
-  // ─── Profit Analyzer ───
   const profitPerRide =
     todayRides.length > 0 ? netProfit / todayRides.length : 0;
   const profitPerKm = todayRunKm > 0 ? netProfit / todayRunKm : 0;
-  const deadKm = todayBlankKm; // Same as Blank KM per spec
+  const deadKm = todayBlankKm;
 
-  // ─── Best Platform & Best Area (today only) ───
   const bestPlatform = useMemo(() => getBestPlatform(todayRides), [todayRides]);
   const bestArea = useMemo(() => getBestArea(todayRides), [todayRides]);
 
   const progressPct =
     settings.dailyTarget > 0
-      ? Math.min(100, (netProfit / settings.dailyTarget) * 100)
+      ? Math.min(100, (totalIncome / settings.dailyTarget) * 100)
       : 0;
-  const isGoodDay = netProfit >= settings.dailyTarget;
+  const isGoodDay = totalIncome >= settings.dailyTarget;
 
   const recommendations = useMemo(
     () => getSmartRecommendations(rides),
     [rides],
   );
 
-  const handleOdometerSave = () => {
-    if (startKmNum > 0) {
-      const now = new Date();
-      const timeStr = now.toTimeString().slice(0, 5);
-      setDailyOdometer(odoDate, startKmNum, endKmNum, timeStr);
-      toast.success("Saved successfully");
-    } else {
-      toast.error("Please enter a Start KM value first");
+  // ─── Weekly Performance ───
+  const weeklyData = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+
+    const weekRides = rides.filter((r) => new Date(r.datetime) >= monday);
+    const weekIncome = weekRides.reduce((s, r) => s + r.netIncome, 0);
+    const weekFuel = fuelEntries
+      .filter((f) => new Date(f.date) >= monday)
+      .reduce((s, f) => s + f.cost, 0);
+    const weekProfit = weekIncome - weekFuel;
+
+    const dayMap: Record<string, number> = {};
+    for (const r of weekRides) {
+      const d = r.datetime.slice(0, 10);
+      dayMap[d] = (dayMap[d] || 0) + r.netIncome;
     }
+    let bestDay = "";
+    let bestDayVal = 0;
+    for (const [d, val] of Object.entries(dayMap)) {
+      if (val > bestDayVal) {
+        bestDayVal = val;
+        bestDay = d;
+      }
+    }
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const bestDayName = bestDay ? dayNames[new Date(bestDay).getDay()] : "—";
+
+    return {
+      rides: weekRides.length,
+      income: weekIncome,
+      profit: weekProfit,
+      bestDay: bestDayName,
+    };
+  }, [rides, fuelEntries]);
+
+  const bestTimeSlot = useMemo(() => {
+    const hourBuckets: Record<string, { total: number; count: number }> = {};
+    for (const r of rides) {
+      const dt = (r as any).ride_time || r.datetime;
+      if (!dt) continue;
+      try {
+        const hour = new Date(dt).getHours();
+        const slot =
+          hour < 6
+            ? "Late Night"
+            : hour < 12
+              ? "Morning"
+              : hour < 17
+                ? "Afternoon"
+                : hour < 21
+                  ? "Evening"
+                  : "Night";
+        if (!hourBuckets[slot]) hourBuckets[slot] = { total: 0, count: 0 };
+        hourBuckets[slot].total += r.netIncome;
+        hourBuckets[slot].count++;
+      } catch {}
+    }
+    const entries = Object.entries(hourBuckets);
+    if (entries.length === 0) return null;
+    const best = entries.sort(
+      (a, b) => b[1].total / b[1].count - a[1].total / a[1].count,
+    )[0];
+    return best ? best[0] : null;
+  }, [rides]);
+
+  // ─── Shift state machine for selectedControlDate ───
+  const selectedShift = shifts.find((s) => s.date === selectedControlDate);
+  const shiftState = !selectedShift
+    ? "NOT_STARTED"
+    : selectedShift.active
+      ? "STARTED"
+      : "COMPLETED";
+  const isShiftActive = shiftState === "STARTED";
+  const isShiftCompleted = shiftState === "COMPLETED";
+  const isOffDay = offDays.includes(selectedControlDate);
+  const isPersonalRun = personalRuns.find(
+    (p) => p.date === selectedControlDate,
+  );
+
+  // ─── BUG 2 FIX: selected date data for shift summary popup ───
+  const selectedDateRides = useMemo(
+    () =>
+      rides.filter(
+        (r) => (r.ride_date || r.datetime.slice(0, 10)) === selectedControlDate,
+      ),
+    [rides, selectedControlDate],
+  );
+  const selectedDateOdoSession = odometerSessions.find(
+    (s) => s.date === selectedControlDate,
+  );
+  const selectedDateShift = shifts.find((s) => s.date === selectedControlDate);
+  const selectedDateRunKm = selectedDateOdoSession
+    ? calcRunKm(selectedDateOdoSession.startKm, selectedDateOdoSession.endKm)
+    : selectedDateShift?.startKm && selectedDateShift?.endKm
+      ? calcRunKm(selectedDateShift.startKm, selectedDateShift.endKm)
+      : 0;
+  const selectedDateRideKm = useMemo(
+    () => calcRideKm(selectedDateRides),
+    [selectedDateRides],
+  );
+  const selectedDateIncome = useMemo(
+    () => selectedDateRides.reduce((s, r) => s + r.netIncome, 0),
+    [selectedDateRides],
+  );
+  const selectedDateFuelCost = useMemo(
+    () =>
+      fuelEntries
+        .filter((f) => f.date.startsWith(selectedControlDate))
+        .reduce((s, f) => s + f.cost, 0),
+    [fuelEntries, selectedControlDate],
+  );
+  const selectedDateBlankKm = calcBlankKm(
+    selectedDateRunKm,
+    selectedDateRideKm,
+  );
+  const selectedDateNetProfit = selectedDateIncome - selectedDateFuelCost;
+
+  const handleStartShift = () => {
+    const km = Number.parseFloat(shiftStartKm) || 0;
+    if (km <= 0) {
+      toast.error("Enter start odometer KM");
+      return;
+    }
+    startShift(km, selectedControlDate);
+    setShowStartShiftPanel(false);
+    setShiftStartKm("");
+    toast.success("Shift started!", {
+      style: {
+        background: "oklch(0.20 0.04 75)",
+        color: "oklch(0.98 0.05 80)",
+        border: "1px solid oklch(0.55 0.15 75 / 0.6)",
+        textShadow: "0 0 8px rgba(255,255,180,0.6)",
+      },
+    });
   };
+
+  const handleEndShift = () => {
+    const km = Number.parseFloat(shiftEndKm) || 0;
+    if (km <= 0) {
+      toast.error("Enter end odometer KM");
+      return;
+    }
+    endShift(km, selectedControlDate);
+    setShowEndShiftPanel(false);
+    setShiftEndKm("");
+    setShiftSummaryOpen(true);
+  };
+
+  const handlePersonalRun = () => {
+    const km = Number.parseFloat(personalRunKm) || 0;
+    if (km <= 0) {
+      toast.error("Enter kilometers driven");
+      return;
+    }
+    addPersonalRun(selectedControlDate, km);
+    setShowPersonalRunPanel(false);
+    setPersonalRunKm("");
+    toast.success("Personal run recorded");
+  };
+
+  const handleUpdateShift = () => {
+    const startKm = Number.parseFloat(editStartKm) || 0;
+    const endKm = Number.parseFloat(editEndKm) || 0;
+    if (startKm <= 0 || endKm <= 0) {
+      toast.error("Enter valid KM values");
+      return;
+    }
+    if (endKm <= startKm) {
+      toast.error("End KM must be greater than Start KM");
+      return;
+    }
+    updateShift(selectedControlDate, { startKm, endKm });
+    setShowEditShiftPanel(false);
+    // BUG 6 FIX: reset edit fields after save
+    setEditStartKm("");
+    setEditEndKm("");
+    toast.success("Shift updated");
+  };
+
+  const handleSyncClick = () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setTimeout(() => setIsSyncing(false), 1500);
+  };
+
+  // BUG 2 FIX: shiftSummaryData now uses selectedControlDate data
+  const shiftSummaryData = useMemo(() => {
+    const tips = selectedDateRides.reduce((s, r) => s + r.tips, 0);
+    return {
+      rides: selectedDateRides.length,
+      rideKm: selectedDateRideKm,
+      runKm: selectedDateRunKm,
+      income: selectedDateIncome,
+      fuelCost: selectedDateFuelCost,
+      deadKm: selectedDateBlankKm,
+      tips,
+      netProfit: selectedDateNetProfit,
+      date: formatISTDate(selectedControlDate),
+    };
+  }, [
+    selectedDateRides,
+    selectedDateRideKm,
+    selectedDateRunKm,
+    selectedDateIncome,
+    selectedDateFuelCost,
+    selectedDateBlankKm,
+    selectedDateNetProfit,
+    selectedControlDate,
+  ]);
+
+  useEffect(() => {
+    const notif = localStorage.getItem("biju_notifications") !== "false";
+    if (!notif) return;
+    const now = new Date();
+    const hour = now.getHours();
+    const todayKey = now.toISOString().split("T")[0];
+    if (
+      hour >= NOTIFICATION_THRESHOLDS.LOW_EARNINGS_HOUR &&
+      totalIncome < NOTIFICATION_THRESHOLDS.LOW_EARNINGS_AMOUNT
+    ) {
+      const key = `biju_notif_low_earnings_${todayKey}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        toast.warning(
+          `Low earnings today: ₹${totalIncome.toFixed(0)} — consider a few more rides!`,
+        );
+      }
+    }
+    if (
+      todayRunKm > 0 &&
+      todayBlankKm / todayRunKm > NOTIFICATION_THRESHOLDS.HIGH_BLANK_KM_PCT
+    ) {
+      const key = `biju_notif_blank_km_${todayKey}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        toast.warning(
+          `High blank KM: ${todayBlankKm.toFixed(1)} km empty (${Math.round((todayBlankKm / todayRunKm) * 100)}% of run KM)`,
+        );
+      }
+    }
+    if (
+      totalIncome > 0 &&
+      todayFuelCost / totalIncome > NOTIFICATION_THRESHOLDS.HIGH_FUEL_PCT
+    ) {
+      const key = `biju_notif_fuel_${todayKey}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        toast.warning(
+          `High fuel cost: ₹${todayFuelCost.toFixed(0)} is ${Math.round((todayFuelCost / totalIncome) * 100)}% of today income`,
+        );
+      }
+    }
+  }, [totalIncome, todayRunKm, todayBlankKm, todayFuelCost]);
+
+  useEffect(() => {
+    const notif = localStorage.getItem("biju_notifications") !== "false";
+    if (!notif) return;
+    try {
+      const shiftsRaw = JSON.parse(localStorage.getItem("biju_shifts") || "[]");
+      const todayStr = new Date().toISOString().split("T")[0];
+      const todayShift = shiftsRaw.find(
+        (s: any) => s.date === todayStr && s.active === true,
+      );
+      if (todayShift?.startTime) {
+        const hrs =
+          (Date.now() - new Date(todayShift.startTime).getTime()) / 3600000;
+        if (hrs >= NOTIFICATION_THRESHOLDS.SHIFT_REMINDER_HOURS) {
+          const key = `biju_notif_shift_${todayStr}`;
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, "1");
+            toast.warning(
+              "You have been driving for 10+ hours. Consider ending your shift and resting!",
+            );
+          }
+        }
+      }
+    } catch {}
+  }, []);
 
   const fadeUp = (delay: number) => ({
     initial: { opacity: 0, y: 14 },
@@ -173,31 +512,480 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     <div className="flex flex-col min-h-screen pb-20">
       <Header title={t.home.title} onAvatarClick={onAvatarClick} />
       <main className="flex-1 px-4 pt-4 pb-6 space-y-3">
-        {/* ─── Period Label ─── */}
+        {/* ─── BUG 7 FIX: Dynamic Greeting ─── */}
+        <motion.div {...fadeUp(0)} className="pt-1 pb-0.5">
+          <p
+            className="text-base font-bold"
+            style={{ color: isDark ? "#EAF2FF" : "oklch(0.35 0.12 264)" }}
+          >
+            {greeting}
+          </p>
+        </motion.div>
+
+        {/* ─── Cloud Sync Badge ─── */}
         <motion.div
-          {...fadeUp(0)}
+          {...fadeUp(0.01)}
           className="flex items-center justify-between"
         >
           <p
             className="text-sm font-semibold"
-            style={{ color: "oklch(0.65 0.10 264)" }}
+            style={{ color: isDark ? "#AFC8FF" : "oklch(0.45 0.10 264)" }}
           >
             {periodLabel}
           </p>
-          <span
-            className="text-xs font-bold px-3 py-1 rounded-full text-white"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-ocid="home.sync.button"
+              onClick={handleSyncClick}
+              className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300 ${
+                isSyncing ? "animate-pulse" : ""
+              }`}
+              style={{
+                background: isSyncing
+                  ? "oklch(0.52 0.21 264 / 0.15)"
+                  : syncStatus === "synced"
+                    ? isDark
+                      ? "#22C55E"
+                      : "oklch(0.58 0.16 142 / 0.15)"
+                    : syncStatus === "offline"
+                      ? "oklch(0.72 0.18 75 / 0.20)"
+                      : "oklch(0.52 0.21 264 / 0.15)",
+                color: isSyncing
+                  ? "oklch(0.42 0.18 264)"
+                  : syncStatus === "synced"
+                    ? isDark
+                      ? "white"
+                      : "oklch(0.42 0.14 142)"
+                    : syncStatus === "offline"
+                      ? "oklch(0.50 0.16 75)"
+                      : "oklch(0.42 0.18 264)",
+                boxShadow:
+                  syncStatus === "synced" && isDark
+                    ? "0 0 8px rgba(34, 197, 94, 0.4)"
+                    : "none",
+              }}
+            >
+              {isSyncing ? (
+                <RefreshCw size={10} className="animate-spin" />
+              ) : syncStatus === "synced" ? (
+                <Cloud size={10} />
+              ) : syncStatus === "syncing" ? (
+                <CloudUpload size={10} className="animate-pulse" />
+              ) : (
+                <CloudOff size={10} />
+              )}
+              {isSyncing
+                ? "Syncing..."
+                : syncStatus === "synced"
+                  ? "Synced"
+                  : syncStatus === "syncing"
+                    ? "Syncing"
+                    : "Offline"}
+            </button>
+            <button
+              type="button"
+              data-ocid="home.keep_going.button"
+              onClick={() => setShowKeepGoingPopup(true)}
+              className="text-xs font-bold px-3 py-1 rounded-full text-white transition-transform active:scale-95"
+              style={{
+                background: isGoodDay
+                  ? "oklch(0.48 0.16 142)"
+                  : "oklch(0.60 0.14 75)",
+                boxShadow: isGoodDay
+                  ? "0 2px 8px oklch(0.48 0.16 142 / 0.4)"
+                  : "0 2px 8px oklch(0.60 0.14 75 / 0.4)",
+              }}
+            >
+              {isGoodDay ? "Good Day 🎉" : "Keep Going 💪"}
+            </button>
+          </div>
+        </motion.div>
+
+        {/* ─── Shift Control ─── */}
+        <motion.div
+          {...fadeUp(0.02)}
+          className="rounded-2xl p-3 border bg-card"
+          style={{ borderColor: "oklch(var(--border))" }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            Shift Control
+          </p>
+
+          {/* Date picker — drives all shift operations */}
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Shift Date
+            </p>
+            <Input
+              data-ocid="shift.date.input"
+              type="date"
+              value={selectedControlDate}
+              max={today}
+              onChange={(e) => {
+                setSelectedControlDate(e.target.value);
+                setShowStartShiftPanel(false);
+                setShowEndShiftPanel(false);
+                setShowPersonalRunPanel(false);
+                setShowEditShiftPanel(false);
+              }}
+              className="h-10 rounded-xl"
+            />
+          </div>
+
+          {/* Status badges */}
+          {isOffDay && (
+            <div
+              className="mb-2 px-3 py-1.5 rounded-xl text-sm font-semibold text-center"
+              style={{
+                background: "oklch(0.55 0.02 264 / 0.15)",
+                color: "oklch(0.40 0.02 264)",
+              }}
+            >
+              🛌 OFF DAY
+            </div>
+          )}
+          {isPersonalRun && (
+            <div
+              className="mb-2 px-3 py-1.5 rounded-xl text-sm font-semibold text-center"
+              style={{
+                background: "oklch(0.52 0.21 264 / 0.15)",
+                color: "oklch(0.38 0.18 264)",
+              }}
+            >
+              🚗 PERSONAL RUN — {isPersonalRun.km} km
+            </div>
+          )}
+
+          {/* Shift active indicator */}
+          {isShiftActive && (
+            <div
+              className="mb-2 px-3 py-1.5 rounded-xl text-xs font-medium"
+              style={{
+                background: "oklch(0.60 0.14 75 / 0.15)",
+                color: "oklch(0.45 0.12 75)",
+              }}
+            >
+              ⚡ Shift Active since{" "}
+              {new Date(selectedShift!.startTime).toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button
+              data-ocid="shift.start_button"
+              className="flex-1 h-11 rounded-xl font-semibold text-white text-sm gap-1.5"
+              disabled={isShiftActive || isShiftCompleted || isOffDay}
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.45 0.20 142) 0%, oklch(0.52 0.18 142) 100%)",
+                opacity:
+                  isShiftActive || isShiftCompleted || isOffDay ? 0.5 : 1,
+              }}
+              onClick={() => {
+                setShowStartShiftPanel(true);
+                setShowEndShiftPanel(false);
+              }}
+            >
+              ▶ Start Shift
+            </Button>
+            <Button
+              data-ocid="shift.end_button"
+              className="flex-1 h-11 rounded-xl font-semibold text-white text-sm gap-1.5"
+              disabled={!isShiftActive}
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.48 0.18 27) 0%, oklch(0.55 0.20 27) 100%)",
+                opacity: !isShiftActive ? 0.5 : 1,
+              }}
+              onClick={() => {
+                setShowEndShiftPanel(true);
+                setShowStartShiftPanel(false);
+              }}
+            >
+              ■ End Shift
+            </Button>
+          </div>
+
+          {/* Start shift panel — only needs KM (date already selected above) */}
+          {showStartShiftPanel && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mt-3 space-y-2"
+            >
+              <p className="text-xs font-medium text-muted-foreground">
+                Start Odometer (KM)
+              </p>
+              <Input
+                data-ocid="shift.start_km.input"
+                type="number"
+                placeholder="e.g. 39740"
+                value={shiftStartKm}
+                onChange={(e) => setShiftStartKm(e.target.value)}
+                className="h-11 rounded-xl"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10 rounded-xl text-sm"
+                  onClick={() => setShowStartShiftPanel(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  data-ocid="shift.confirm_start.button"
+                  className="flex-1 h-10 rounded-xl text-sm text-white"
+                  style={{ background: "oklch(0.45 0.20 142)" }}
+                  onClick={handleStartShift}
+                >
+                  Confirm Start
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* End shift panel */}
+          {showEndShiftPanel && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mt-3 space-y-2"
+            >
+              <p className="text-xs font-medium text-muted-foreground">
+                Current Odometer (KM)
+              </p>
+              <Input
+                data-ocid="shift.end_km.input"
+                type="number"
+                placeholder="e.g. 39912"
+                value={shiftEndKm}
+                onChange={(e) => setShiftEndKm(e.target.value)}
+                className="h-11 rounded-xl"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10 rounded-xl text-sm"
+                  onClick={() => setShowEndShiftPanel(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  data-ocid="shift.confirm_end.button"
+                  className="flex-1 h-10 rounded-xl text-sm text-white"
+                  style={{ background: "oklch(0.48 0.18 27)" }}
+                  onClick={handleEndShift}
+                >
+                  Confirm End
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Completed shift: show summary + edit/delete */}
+          {isShiftCompleted && selectedShift && (
+            <div
+              className="mt-2 rounded-xl border p-3 space-y-2"
+              style={{
+                background: "oklch(0.52 0.21 264 / 0.06)",
+                borderColor: "oklch(0.52 0.21 264 / 0.20)",
+              }}
+            >
+              <p
+                className="text-xs font-semibold"
+                style={{ color: "oklch(0.42 0.15 264)" }}
+              >
+                ✅ Shift Completed
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <span>
+                  Start KM: <strong>{selectedShift.startKm}</strong>
+                </span>
+                <span>
+                  End KM: <strong>{selectedShift.endKm ?? "—"}</strong>
+                </span>
+              </div>
+              {showEditShiftPanel ? (
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    placeholder="Start KM"
+                    value={editStartKm}
+                    onChange={(e) => setEditStartKm(e.target.value)}
+                    className="h-10 rounded-xl"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="End KM"
+                    value={editEndKm}
+                    onChange={(e) => setEditEndKm(e.target.value)}
+                    className="h-10 rounded-xl"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-9 rounded-xl text-xs"
+                      onClick={() => {
+                        setShowEditShiftPanel(false);
+                        setEditStartKm("");
+                        setEditEndKm("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      data-ocid="shift.save_edit.button"
+                      className="flex-1 h-9 rounded-xl text-xs text-white"
+                      style={{ background: "oklch(0.45 0.20 142)" }}
+                      onClick={handleUpdateShift}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    data-ocid="shift.edit_button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-8 rounded-lg text-xs"
+                    onClick={() => {
+                      // BUG 6 FIX: pre-populate edit fields with current values
+                      setEditStartKm(String(selectedShift.startKm));
+                      setEditEndKm(String(selectedShift.endKm ?? ""));
+                      setShowEditShiftPanel(true);
+                    }}
+                  >
+                    ✏️ Edit
+                  </Button>
+                  <Button
+                    data-ocid="shift.delete_button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-8 rounded-lg text-xs"
+                    style={{ color: "oklch(0.52 0.22 27)" }}
+                    onClick={() => setShowDeleteShiftConfirm(true)}
+                  >
+                    🗑️ Delete
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* View summary button — show when shift is completed */}
+          {isShiftCompleted && (
+            <Button
+              data-ocid="shift.view_summary.button"
+              variant="outline"
+              className="w-full h-10 rounded-xl text-sm mt-2 font-semibold"
+              style={{
+                borderColor: "oklch(0.52 0.21 264 / 0.4)",
+                color: "oklch(0.42 0.18 264)",
+              }}
+              onClick={() => setShiftSummaryOpen(true)}
+            >
+              📈 View Summary
+            </Button>
+          )}
+
+          {/* Off Day / Personal Run */}
+          <div className="flex gap-2 mt-2">
+            <Button
+              data-ocid="shift.mark_offday.button"
+              variant="outline"
+              size="sm"
+              className="flex-1 h-9 rounded-xl text-xs"
+              onClick={() =>
+                isOffDay
+                  ? removeOffDay(selectedControlDate)
+                  : addOffDay(selectedControlDate)
+              }
+            >
+              {isOffDay ? "Unmark Off Day" : "🛌 Off Day"}
+            </Button>
+            <Button
+              data-ocid="shift.personal_run.button"
+              variant="outline"
+              size="sm"
+              className="flex-1 h-9 rounded-xl text-xs"
+              onClick={() => {
+                if (isPersonalRun) {
+                  removePersonalRun(selectedControlDate);
+                } else {
+                  // Auto-calculate Personal Run KM = End KM - Start KM if shift has both values
+                  if (selectedShift?.endKm && selectedShift?.startKm) {
+                    const autoKm = selectedShift.endKm - selectedShift.startKm;
+                    if (autoKm > 0) {
+                      setPersonalRunKm(String(autoKm));
+                    }
+                  }
+                  setShowPersonalRunPanel(!showPersonalRunPanel);
+                }
+              }}
+            >
+              {isPersonalRun ? "Clear Personal Run" : "🚗 Personal Run"}
+            </Button>
+          </div>
+
+          {showPersonalRunPanel && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mt-2 space-y-2"
+            >
+              <div className="space-y-1">
+                <Input
+                  data-ocid="shift.personal_run_km.input"
+                  type="number"
+                  placeholder="KM driven personally"
+                  value={personalRunKm}
+                  onChange={(e) => setPersonalRunKm(e.target.value)}
+                  className="h-10 rounded-xl"
+                />
+                {selectedShift?.endKm && selectedShift?.startKm && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Auto-calculated from odometer (End KM − Start KM). You can
+                    edit if needed.
+                  </p>
+                )}
+              </div>
+              <Button
+                data-ocid="shift.personal_run_save.button"
+                className="w-full h-9 rounded-xl text-xs text-white"
+                style={{ background: "oklch(0.52 0.21 264)" }}
+                onClick={handlePersonalRun}
+              >
+                Save
+              </Button>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* ─── Shift Active Banner ─── */}
+        {isShiftActive && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-ocid="shift.active.panel"
+            className="flex items-center gap-2 px-4 py-3 rounded-xl dark:bg-yellow-950/40"
             style={{
-              background: isGoodDay
-                ? "oklch(0.58 0.16 142)"
-                : "oklch(0.68 0.14 75)",
-              boxShadow: isGoodDay
-                ? "0 2px 8px oklch(0.58 0.16 142 / 0.4)"
-                : "0 2px 8px oklch(0.68 0.14 75 / 0.4)",
+              background: "oklch(0.75 0.15 75 / 0.18)",
+              border: "1px solid oklch(0.72 0.15 75 / 0.4)",
             }}
           >
-            {isGoodDay ? "Good Day 🎉" : "Keep Going 💪"}
-          </span>
-        </motion.div>
+            <span style={{ fontSize: 16 }}>⚡</span>
+            <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-100 dark:[text-shadow:0_0_8px_rgba(255,255,180,0.7)]">
+              Shift still active — End Shift to see final profit summary
+            </p>
+          </motion.div>
+        )}
 
         {/* ─── HERO: Net Profit Card ─── */}
         <motion.div
@@ -205,7 +993,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           className="relative overflow-hidden rounded-2xl px-5 py-5"
           style={{
             background:
-              "linear-gradient(135deg, oklch(0.30 0.14 264) 0%, oklch(0.22 0.10 264) 55%, oklch(0.24 0.10 47) 100%)",
+              "linear-gradient(135deg, oklch(0.28 0.14 264) 0%, oklch(0.20 0.10 264) 55%, oklch(0.22 0.10 47) 100%)",
             boxShadow:
               "0 8px 32px -6px oklch(0.22 0.12 264 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.08)",
           }}
@@ -227,12 +1015,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           <div className="relative z-10">
             <p
               className="text-[11px] font-semibold uppercase tracking-widest mb-1"
-              style={{ color: "oklch(0.85 0.08 264)" }}
+              style={{ color: "oklch(0.82 0.08 264)" }}
             >
               {t.home.netProfit}
             </p>
             <p className="text-4xl font-bold font-display text-white leading-none mb-3">
-              {formatAmount(netProfit)}
+              {sym}
+              {animatedProfit.toFixed(2)}
             </p>
             <div className="flex gap-2 flex-wrap">
               <StatPill
@@ -248,7 +1037,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               <StatPill
                 label={t.home.fuelCost}
                 value={formatAmount(todayFuelCost)}
-                accent="oklch(0.72 0.18 27)"
+                accent="oklch(0.62 0.18 27)"
               />
             </div>
           </div>
@@ -260,95 +1049,63 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           data-ocid="dashboard.profit_analyzer.card"
           className="rounded-2xl p-4 border"
           style={{
-            background: "oklch(0.58 0.21 264 / 0.08)",
-            borderColor: "oklch(0.58 0.21 264 / 0.25)",
+            background: "oklch(0.52 0.21 264 / 0.06)",
+            borderColor: "oklch(0.52 0.21 264 / 0.20)",
           }}
         >
           <p
             className="text-[11px] font-semibold uppercase tracking-widest mb-3"
-            style={{ color: "oklch(0.65 0.15 264)" }}
+            style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.15 264)" }}
           >
             Profit Analyzer
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <div
-              className="rounded-xl p-3"
-              style={{ background: "oklch(0.72 0.19 47 / 0.12)" }}
-            >
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                Today's Profit
-              </p>
-              <p
-                className="text-lg font-bold font-display"
-                style={{ color: "oklch(0.72 0.19 47)" }}
-              >
-                {formatAmount(netProfit)}
-              </p>
-            </div>
-            <div
-              className="rounded-xl p-3"
-              style={{ background: "oklch(0.58 0.21 264 / 0.12)" }}
-            >
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                Profit/Ride
-              </p>
-              <p
-                className="text-lg font-bold font-display"
-                style={{ color: "oklch(0.58 0.21 264)" }}
-              >
-                {formatAmount(profitPerRide)}
-              </p>
-            </div>
-            <div
-              className="rounded-xl p-3"
-              style={{ background: "oklch(0.65 0.15 142 / 0.12)" }}
-            >
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                Profit/KM
-              </p>
-              <p
-                className="text-lg font-bold font-display"
-                style={{ color: "oklch(0.65 0.15 142)" }}
-              >
-                {formatAmount(profitPerKm)}
-              </p>
-            </div>
-            <div
-              className="rounded-xl p-3"
-              style={{ background: "oklch(0.62 0.22 27 / 0.12)" }}
-            >
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                Dead KM
-              </p>
-              <p
-                className="text-lg font-bold font-display"
-                style={{ color: "oklch(0.62 0.22 27)" }}
-              >
-                {deadKm.toFixed(1)} km
-              </p>
-            </div>
+            <ProfitTile
+              label="Today's Profit"
+              value={formatAmount(netProfit)}
+              color="oklch(0.55 0.17 47)"
+              bg="oklch(0.72 0.19 47 / 0.10)"
+            />
+            <ProfitTile
+              label="Profit/Ride"
+              value={formatAmount(profitPerRide)}
+              color="oklch(0.42 0.18 264)"
+              bg="oklch(0.52 0.21 264 / 0.10)"
+            />
+            <ProfitTile
+              label="Profit/KM"
+              value={formatAmount(profitPerKm)}
+              color="oklch(0.42 0.14 142)"
+              bg="oklch(0.58 0.16 142 / 0.10)"
+            />
+            <ProfitTile
+              label="Dead KM"
+              value={`${deadKm.toFixed(1)} km`}
+              color="oklch(0.50 0.18 27)"
+              bg="oklch(0.62 0.22 27 / 0.08)"
+            />
           </div>
         </motion.div>
 
-        {/* ─── Best Platform & Best Area ─── */}
-        <motion.div {...fadeUp(0.08)} className="grid grid-cols-2 gap-3">
+        {/* ─── Best Platform & Area ─── */}
+        <motion.div {...fadeUp(0.07)} className="grid grid-cols-2 gap-3">
           <div
             data-ocid="dashboard.best_platform.card"
             className="rounded-2xl p-3 border"
             style={{
-              background: "oklch(0.72 0.19 47 / 0.08)",
-              borderColor: "oklch(0.72 0.19 47 / 0.25)",
+              background: "oklch(0.72 0.19 47 / 0.07)",
+              borderColor: "oklch(0.72 0.19 47 / 0.22)",
             }}
           >
             <div className="flex items-center gap-1.5 mb-1">
               <Star
                 size={12}
-                style={{ color: "oklch(0.72 0.19 47)" }}
-                fill="oklch(0.72 0.19 47)"
+                style={{ color: "oklch(0.55 0.17 47)" }}
+                fill="oklch(0.55 0.17 47)"
               />
               <p
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "oklch(0.72 0.19 47)" }}
+                style={{ color: "oklch(0.55 0.17 47)" }}
               >
                 Best Platform
               </p>
@@ -364,7 +1121,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground leading-snug">
-                Need more rides for analysis
+                Need more rides
               </p>
             )}
           </div>
@@ -372,19 +1129,19 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             data-ocid="dashboard.best_area.card"
             className="rounded-2xl p-3 border"
             style={{
-              background: "oklch(0.58 0.21 264 / 0.08)",
-              borderColor: "oklch(0.58 0.21 264 / 0.25)",
+              background: "oklch(0.52 0.21 264 / 0.07)",
+              borderColor: "oklch(0.52 0.21 264 / 0.22)",
             }}
           >
             <div className="flex items-center gap-1.5 mb-1">
               <Star
                 size={12}
-                style={{ color: "oklch(0.58 0.21 264)" }}
-                fill="oklch(0.58 0.21 264)"
+                style={{ color: "oklch(0.42 0.18 264)" }}
+                fill="oklch(0.42 0.18 264)"
               />
               <p
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "oklch(0.58 0.21 264)" }}
+                style={{ color: "oklch(0.42 0.18 264)" }}
               >
                 Best Area
               </p>
@@ -400,9 +1157,61 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground leading-snug">
-                Need more rides for analysis
+                Need more rides
               </p>
             )}
+          </div>
+        </motion.div>
+
+        {/* ─── Weekly Performance ─── */}
+        <motion.div
+          {...fadeUp(0.08)}
+          data-ocid="dashboard.weekly.card"
+          className="rounded-2xl p-4 border bg-card"
+          style={{ borderColor: "oklch(var(--border))" }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            This Week
+          </p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Rides</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.42 0.18 264)" }}
+              >
+                {weeklyData.rides}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Income</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.42 0.14 142)" }}
+              >
+                {sym}
+                {weeklyData.income.toFixed(0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Profit</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.42 0.14 142)" }}
+              >
+                {sym}
+                {weeklyData.profit.toFixed(0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Best Day</p>
+              <p
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.55 0.17 47)" }}
+              >
+                {weeklyData.bestDay}
+              </p>
+            </div>
           </div>
         </motion.div>
 
@@ -411,13 +1220,13 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           {...fadeUp(0.1)}
           className="rounded-2xl p-4 border"
           style={{
-            background: "oklch(0.65 0.15 142 / 0.08)",
-            borderColor: "oklch(0.65 0.15 142 / 0.25)",
+            background: "oklch(0.58 0.16 142 / 0.06)",
+            borderColor: "oklch(0.58 0.16 142 / 0.20)",
           }}
         >
           <p
             className="text-[11px] font-semibold uppercase tracking-widest mb-2"
-            style={{ color: "oklch(0.58 0.12 142)" }}
+            style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.12 142)" }}
           >
             All Time Totals
           </p>
@@ -426,7 +1235,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               <p className="text-[10px] text-muted-foreground">Rides</p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.58 0.21 264)" }}
+                style={{ color: "oklch(0.42 0.18 264)" }}
               >
                 {allTimeRides}
               </p>
@@ -435,7 +1244,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               <p className="text-[10px] text-muted-foreground">Income</p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.65 0.15 142)" }}
+                style={{ color: "oklch(0.42 0.14 142)" }}
               >
                 {formatAmount(allTimeIncome)}
               </p>
@@ -444,16 +1253,16 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               <p className="text-[10px] text-muted-foreground">Fuel</p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.62 0.22 27)" }}
+                style={{ color: "oklch(0.50 0.18 27)" }}
               >
                 {formatAmount(allTimeFuel)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Dist</p>
+              <p className="text-[10px] text-muted-foreground">Ride KM</p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.72 0.18 264)" }}
+                style={{ color: "oklch(0.42 0.18 264)" }}
               >
                 {allTimeDist.toFixed(0)}km
               </p>
@@ -461,47 +1270,19 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           </div>
         </motion.div>
 
-        {/* ─── Distance Card ─── */}
-        <motion.div
-          {...fadeUp(0.12)}
-          className="rounded-2xl px-4 py-4 border"
-          style={{
-            background: "oklch(0.58 0.21 264 / 0.10)",
-            borderColor: "oklch(0.58 0.21 264 / 0.25)",
-            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.05)",
-          }}
-        >
-          <p
-            className="text-[11px] font-semibold uppercase tracking-widest mb-1"
-            style={{ color: "oklch(0.65 0.10 264)" }}
-          >
-            {t.home.totalDistance}
-          </p>
-          <p
-            className="text-2xl font-bold font-display"
-            style={{ color: "oklch(0.78 0.18 264)" }}
-          >
-            {totalRideDistance.toFixed(1)}
-            <span className="text-base font-medium ml-1 opacity-70">km</span>
-          </p>
-        </motion.div>
-
-        {/* ─── Daily Target ─── */}
+        {/* ─── Daily Target + Progress ─── */}
         <motion.div
           {...fadeUp(0.14)}
           className="rounded-2xl p-4 border bg-card"
-          style={{
-            borderColor: "oklch(var(--border))",
-            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.04)",
-          }}
+          style={{ borderColor: "oklch(var(--border))" }}
         >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "oklch(0.58 0.21 264 / 0.15)" }}
+                style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
               >
-                <Target size={15} style={{ color: "oklch(0.72 0.18 264)" }} />
+                <Target size={15} style={{ color: "oklch(0.45 0.18 264)" }} />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -512,148 +1293,32 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 </p>
               </div>
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">{t.home.progress}</span>
-              <span className="font-semibold">{progressPct.toFixed(0)}%</span>
-            </div>
-            <div
-              className="h-2.5 rounded-full overflow-hidden"
-              style={{ background: "oklch(var(--muted))" }}
+            <span
+              className="text-sm font-bold"
+              style={{
+                color: isGoodDay
+                  ? "oklch(0.42 0.14 142)"
+                  : "oklch(0.42 0.18 264)",
+              }}
             >
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${progressPct}%`,
-                  background: isGoodDay
-                    ? "linear-gradient(90deg, oklch(0.55 0.18 142), oklch(0.65 0.18 142))"
-                    : "linear-gradient(90deg, oklch(0.58 0.21 264), oklch(0.72 0.19 47))",
-                  boxShadow: isGoodDay
-                    ? "0 0 8px oklch(0.60 0.18 142 / 0.6)"
-                    : "0 0 8px oklch(0.65 0.20 264 / 0.6)",
-                }}
-              />
-            </div>
+              {progressPct.toFixed(0)}%
+            </span>
           </div>
+          <Progress value={progressPct} className="h-2.5 rounded-full" />
+          <p className="text-[10px] text-muted-foreground text-right mt-1">
+            {formatAmount(totalIncome)} / {formatAmount(settings.dailyTarget)}
+          </p>
         </motion.div>
 
-        {/* ─── Odometer Section ─── */}
-        <motion.div
-          {...fadeUp(0.16)}
-          className="rounded-2xl p-4 border bg-card"
-          style={{ borderColor: "oklch(var(--border))" }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={15} style={{ color: "oklch(0.72 0.19 47)" }} />
-              <h3 className="font-semibold text-sm font-display">Odometer</h3>
-            </div>
-          </div>
-
-          {/* Date selector for backdating */}
-          <div className="mb-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-              Date
-            </p>
-            <Input
-              data-ocid="home.ododate.input"
-              type="date"
-              value={odoDate}
-              onChange={(e) => setOdoDate(e.target.value)}
-              className="h-10"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                {t.home.startKm}
-              </p>
-              <Input
-                data-ocid="home.startodometer.input"
-                type="number"
-                placeholder="e.g. 12000"
-                value={startKm}
-                onChange={(e) => setStartKm(e.target.value)}
-                onBlur={handleOdometerSave}
-                className="h-11"
-              />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                {t.home.endKm}
-              </p>
-              <Input
-                data-ocid="home.endodometer.input"
-                type="number"
-                placeholder="e.g. 12085"
-                value={endKm}
-                onChange={(e) => setEndKm(e.target.value)}
-                onBlur={handleOdometerSave}
-                className="h-11"
-              />
-            </div>
-          </div>
-
-          {/* Save Odometer Button */}
-          <Button
-            data-ocid="home.save_odometer.button"
-            onClick={handleOdometerSave}
-            className="w-full h-11 rounded-xl font-semibold gap-2 text-white mb-3 transition-all active:scale-[0.98]"
-            style={{
-              background:
-                "linear-gradient(135deg, oklch(0.45 0.20 264) 0%, oklch(0.55 0.22 264) 100%)",
-              boxShadow: "0 4px 14px -3px oklch(0.55 0.22 264 / 0.45)",
-            }}
-          >
-            <Save size={16} />
-            Save Odometer
-          </Button>
-
-          <div
-            className="flex gap-0 rounded-xl overflow-hidden border"
-            style={{ borderColor: "oklch(var(--border))" }}
-          >
-            <div className="flex-1 px-3 py-2 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                {t.home.dayDistance}
-              </p>
-              <p className="text-base font-bold">{dayDistance.toFixed(1)} km</p>
-            </div>
-            <div
-              className="w-px"
-              style={{ background: "oklch(var(--border))" }}
-            />
-            <div className="flex-1 px-3 py-2 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                {t.home.blankKm}
-              </p>
-              <p
-                className="text-base font-bold"
-                style={{ color: "oklch(0.62 0.22 27)" }}
-              >
-                {blankKm.toFixed(1)} km
-              </p>
-            </div>
-          </div>
-
-          {odoDate !== today && (
-            <p className="text-[10px] text-center text-muted-foreground mt-2">
-              Viewing: {formatISTDate(odoDate)}
-            </p>
-          )}
-        </motion.div>
-
-        {/* ─── Add Fuel / View Fuel Log Button ─── */}
+        {/* ─── Add Fuel Button ─── */}
         <motion.div {...fadeUp(0.2)}>
           <Button
             data-ocid="home.addfuel.button"
             className="w-full h-12 rounded-xl text-base font-semibold gap-2 text-white transition-all active:scale-[0.98]"
             style={{
               background:
-                "linear-gradient(135deg, oklch(0.62 0.17 47) 0%, oklch(0.72 0.19 47) 100%)",
-              boxShadow: "0 4px 16px -3px oklch(0.72 0.19 47 / 0.45)",
+                "linear-gradient(135deg, oklch(0.52 0.16 47) 0%, oklch(0.62 0.18 47) 100%)",
+              boxShadow: "0 4px 16px -3px oklch(0.62 0.18 47 / 0.40)",
             }}
             onClick={() => setFuelModalOpen(true)}
           >
@@ -663,7 +1328,23 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
         </motion.div>
 
         {/* ─── Smart Insights ─── */}
-        {recommendations.length > 0 && (
+        {rides.length < 5 ? (
+          <motion.div
+            {...fadeUp(0.24)}
+            className="rounded-2xl p-4 border bg-card"
+            style={{ borderColor: "oklch(var(--border))" }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Zap size={14} style={{ color: "oklch(0.45 0.18 264)" }} />
+              <h3 className="font-semibold text-sm font-display">
+                {t.home.insights}
+              </h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              More ride data needed for insights (need 5+ rides)
+            </p>
+          </motion.div>
+        ) : recommendations.length > 0 ? (
           <motion.div
             {...fadeUp(0.24)}
             className="rounded-2xl p-4 border bg-card"
@@ -672,34 +1353,249 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             <div className="flex items-center gap-2 mb-3">
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "oklch(0.58 0.21 264 / 0.15)" }}
+                style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
               >
-                <Zap size={14} style={{ color: "oklch(0.78 0.18 264)" }} />
+                <Zap size={14} style={{ color: "oklch(0.45 0.18 264)" }} />
               </div>
               <h3 className="font-semibold text-sm font-display">
                 {t.home.insights}
               </h3>
             </div>
             <div className="space-y-2.5">
-              {recommendations.map((rec) => (
-                <div
-                  key={rec}
-                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
-                >
-                  <span
-                    className="mt-0.5 flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5"
-                    style={{ background: "oklch(0.72 0.19 47)" }}
-                  />
-                  {rec}
+              {recommendations.slice(0, 3).map((rec) => (
+                <div key={rec} className="flex gap-2.5 items-start">
+                  <span className="text-base mt-0.5">💡</span>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    {rec}
+                  </p>
                 </div>
               ))}
             </div>
           </motion.div>
-        )}
+        ) : null}
+
+        {/* ─── Driver Comparison Insight ─── */}
+        {rides.length >= 5 &&
+          (() => {
+            const totalNetAll = rides.reduce((s, r) => s + r.netIncome, 0);
+            const totalDistAll = rides.reduce((s, r) => s + r.distance, 0);
+            const allTimeProfitPerKm =
+              totalDistAll > 0 ? totalNetAll / totalDistAll : 0;
+            return (
+              <motion.div
+                {...fadeUp(0.28)}
+                className="rounded-2xl p-4 border bg-card"
+                style={{
+                  borderColor: "oklch(0.58 0.21 264 / 0.4)",
+                  background: "oklch(0.58 0.21 264 / 0.04)",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    style={{ background: "oklch(0.52 0.21 264 / 0.12)" }}
+                  >
+                    <TrendingUp
+                      size={14}
+                      style={{ color: "oklch(0.45 0.18 264)" }}
+                    />
+                  </div>
+                  <h3 className="font-semibold text-sm font-display">
+                    Driver Comparison
+                  </h3>
+                </div>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">
+                      Your Profit per KM
+                    </p>
+                    <p
+                      className="text-2xl font-bold font-display"
+                      style={{ color: "oklch(0.42 0.17 142)" }}
+                    >
+                      {sym}
+                      {allTimeProfitPerKm.toFixed(1)}
+                      <span className="text-sm font-normal text-muted-foreground ml-1">
+                        / km
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 italic">
+                  🏙️ City average data coming soon
+                </p>
+              </motion.div>
+            );
+          })()}
       </main>
+
+      {/* Keep Going Popup */}
+      {showKeepGoingPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowKeepGoingPopup(false)}
+          onKeyDown={(e) => e.key === "Escape" && setShowKeepGoingPopup(false)}
+          tabIndex={-1}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-card border border-border p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            data-ocid="home.keep_going.modal"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base">Daily Progress</h3>
+              <button
+                type="button"
+                data-ocid="home.keep_going.close_button"
+                onClick={() => setShowKeepGoingPopup(false)}
+                className="text-muted-foreground hover:text-foreground w-7 h-7 rounded-full flex items-center justify-center"
+              >
+                &times;
+              </button>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span>Progress</span>
+                <span>{progressPct.toFixed(0)}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-muted">
+                <div
+                  className="h-2 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${progressPct}%`,
+                    background:
+                      progressPct >= 100
+                        ? "oklch(0.48 0.16 142)"
+                        : "oklch(0.60 0.14 75)",
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-muted/50 p-3 text-center">
+                <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                  {sym}
+                  {totalIncome.toFixed(0)}
+                </p>
+                <p className="text-xs text-muted-foreground">Earned Today</p>
+              </div>
+              <div className="rounded-xl bg-muted/50 p-3 text-center">
+                <p
+                  className="text-xl font-bold"
+                  style={{
+                    color:
+                      Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
+                        ? "oklch(0.55 0.17 47)"
+                        : "oklch(0.48 0.16 142)",
+                  }}
+                >
+                  {Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
+                    ? `${sym}${Math.max(0, (settings.dailyTarget || 0) - totalIncome).toFixed(0)}`
+                    : "Done!"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {Math.max(0, (settings.dailyTarget || 0) - totalIncome) > 0
+                    ? "Remaining"
+                    : "Target Achieved"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-muted/50 p-3 text-center col-span-2">
+                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                  {sym}
+                  {(settings.dailyTarget || 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">Daily Target</p>
+              </div>
+            </div>
+            <div
+              className="rounded-xl p-3 text-center"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.58 0.21 264 / 0.08), oklch(0.72 0.19 47 / 0.08))",
+              }}
+            >
+              <p className="text-sm font-medium">
+                {progressPct >= 100
+                  ? "Fantastic! You have hit your target today!"
+                  : progressPct >= 75
+                    ? "Almost there! Just a few more rides!"
+                    : progressPct >= 50
+                      ? "Great progress! Halfway to your goal!"
+                      : progressPct >= 25
+                        ? "Good start! Keep the momentum going!"
+                        : "Every ride counts! You have got this!"}
+              </p>
+            </div>
+            {bestTimeSlot && (
+              <div className="text-xs text-muted-foreground text-center">
+                Best earning time:{" "}
+                <span className="font-semibold text-foreground">
+                  {bestTimeSlot}
+                </span>
+              </div>
+            )}
+            {bestArea && (
+              <div className="text-xs text-muted-foreground text-center">
+                Best area:{" "}
+                <span className="font-semibold text-foreground">
+                  {bestArea.area}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shift Confirmation Dialog */}
+      {showDeleteShiftConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              Delete Shift?
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Are you sure you want to delete this shift? This action cannot be
+              undone.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                data-ocid="shift.delete_confirm.cancel_button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowDeleteShiftConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                data-ocid="shift.delete_confirm.confirm_button"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => {
+                  deleteShift(selectedControlDate);
+                  setShowDeleteShiftConfirm(false);
+                  setShowEditShiftPanel(false);
+                  setShowStartShiftPanel(false);
+                  setShowEndShiftPanel(false);
+                  setEditStartKm("");
+                  setEditEndKm("");
+                  toast.success("Shift deleted");
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <FuelHistoryModal
         open={fuelModalOpen}
         onClose={() => setFuelModalOpen(false)}
+      />
+      <ShiftSummaryModal
+        open={shiftSummaryOpen}
+        onClose={() => setShiftSummaryOpen(false)}
+        summary={shiftSummaryData}
+        currencySymbol={sym}
       />
     </div>
   );
@@ -713,14 +1609,30 @@ function StatPill({
   return (
     <div
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-      style={{ background: "oklch(1 0 0 / 0.09)" }}
+      style={{ background: `${accent} / 0.18` }}
     >
-      <span
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ background: accent }}
-      />
-      <span className="text-[10px] text-white/60">{label}</span>
-      <span className="text-[11px] font-bold text-white">{value}</span>
+      <span className="text-[10px] font-medium opacity-80 text-white">
+        {label}:
+      </span>
+      <span className="text-xs font-bold text-white">{value}</span>
+    </div>
+  );
+}
+
+function ProfitTile({
+  label,
+  value,
+  color,
+  bg,
+}: { label: string; value: string; color: string; bg: string }) {
+  return (
+    <div className="rounded-xl p-3" style={{ background: bg }}>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+        {label}
+      </p>
+      <p className="text-lg font-bold font-display" style={{ color }}>
+        {value}
+      </p>
     </div>
   );
 }
