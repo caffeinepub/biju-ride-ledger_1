@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useState } from "react";
 import Header from "../components/Header";
 import { getTranslations } from "../i18n";
@@ -46,6 +47,8 @@ export default function SettingsPage({
   const [selectedCommissionPlatform, setSelectedCommissionPlatform] = useState<
     Platform | ""
   >("");
+
+  const isDarkMode = appTheme === "dark";
 
   const updateCommission = (
     platform: Platform,
@@ -87,9 +90,9 @@ export default function SettingsPage({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="en">🌐 English</SelectItem>
-              <SelectItem value="bn">🇧🇩 বাংলা</SelectItem>
-              <SelectItem value="hi">🇮🇳 हिन्दी</SelectItem>
+              <SelectItem value="en">English (EN)</SelectItem>
+              <SelectItem value="bn">বাংলা (BN)</SelectItem>
+              <SelectItem value="hi">हिन्दी (HI)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -294,104 +297,61 @@ export default function SettingsPage({
 
         {/* App Preferences */}
         <div className="rounded-2xl bg-card border border-border p-4">
-          <h3 className="font-display font-semibold mb-3">
+          <h3 className="font-display font-semibold mb-4">
             {t.settings.appPreferences}
           </h3>
 
-          {/* Theme */}
-          <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">
-              {t.settings.appTheme}
-            </Label>
-            <div className="flex gap-2" data-ocid="settings.theme.toggle">
-              {(["light", "dark"] as const).map((th) => (
-                <button
-                  type="button"
-                  key={th}
-                  onClick={() => onThemeChange?.(th)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all capitalize"
-                  style={{
-                    background:
-                      appTheme === th
-                        ? "oklch(0.42 0.18 264)"
-                        : "oklch(var(--muted))",
-                    color:
-                      appTheme === th
-                        ? "white"
-                        : "oklch(var(--muted-foreground))",
-                  }}
-                >
-                  {th === "light"
-                    ? t.settings.lightTheme
-                    : t.settings.darkTheme}
-                </button>
-              ))}
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">{t.settings.appTheme}</p>
+              <p className="text-xs text-muted-foreground">
+                {isDarkMode ? t.settings.darkTheme : t.settings.lightTheme}
+              </p>
             </div>
+            <Switch
+              data-ocid="settings.theme.toggle"
+              checked={isDarkMode}
+              onCheckedChange={(checked) =>
+                onThemeChange?.(checked ? "dark" : "light")
+              }
+            />
           </div>
 
-          {/* Sound */}
-          <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">
-              {t.settings.appSound}
-            </Label>
-            <div className="flex gap-2" data-ocid="settings.sound.toggle">
-              {(["on", "off"] as const).map((s) => {
-                const isOn = soundEnabled === (s === "on");
-                return (
-                  <button
-                    type="button"
-                    key={s}
-                    onClick={() => {
-                      const newVal = s === "on";
-                      setSoundEnabled(newVal);
-                      localStorage.setItem(
-                        "biju_sound_enabled",
-                        String(newVal),
-                      );
-                    }}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all uppercase"
-                    style={{
-                      background: isOn
-                        ? "oklch(0.50 0.18 142)"
-                        : "oklch(var(--muted))",
-                      color: isOn ? "white" : "oklch(var(--muted-foreground))",
-                    }}
-                  >
-                    {s === "on" ? t.settings.soundOn : t.settings.soundOff}
-                  </button>
-                );
-              })}
+          {/* Sound Toggle */}
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <p className="font-medium text-sm">{t.settings.appSound}</p>
+              <p className="text-xs text-muted-foreground">
+                {soundEnabled ? t.settings.soundOn : t.settings.soundOff}
+              </p>
             </div>
+            <Switch
+              data-ocid="settings.sound.toggle"
+              checked={soundEnabled}
+              onCheckedChange={(checked) => {
+                setSoundEnabled(checked);
+                localStorage.setItem("biju_sound_enabled", String(checked));
+              }}
+            />
           </div>
 
-          {/* Notifications */}
-          <div className="flex items-center justify-between py-2 border-t border-border">
+          {/* Notifications Toggle */}
+          <div className="flex items-center justify-between py-3">
             <div>
               <p className="font-medium text-sm">{t.settings.notifications}</p>
               <p className="text-xs text-muted-foreground">
                 {t.settings.notificationsDesc}
               </p>
             </div>
-            <button
-              type="button"
+            <Switch
               data-ocid="settings.notifications.toggle"
-              onClick={() => {
-                const newVal = !notificationsEnabled;
-                setNotificationsEnabled(newVal);
-                localStorage.setItem("biju_notifications", String(newVal));
+              checked={notificationsEnabled}
+              onCheckedChange={(checked) => {
+                setNotificationsEnabled(checked);
+                localStorage.setItem("biju_notifications", String(checked));
               }}
-              className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                notificationsEnabled
-                  ? "bg-green-500"
-                  : "bg-gray-300 dark:bg-gray-600"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                  notificationsEnabled ? "translate-x-6" : ""
-                }`}
-              />
-            </button>
+            />
           </div>
         </div>
 

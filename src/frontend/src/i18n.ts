@@ -225,6 +225,7 @@ type Translations = {
     toastError: string;
     toastSuccess: string;
     electricNote: string;
+    pricePerLitre: string;
   };
   common: {
     km: string;
@@ -581,6 +582,7 @@ const translations: Record<Language, Translations> = {
       toastError: "Please fill all fields correctly",
       toastSuccess: "Fuel entry saved!",
       electricNote: "Electric vehicles don't require fuel cost",
+      pricePerLitre: "Price per Litre",
     },
     common: {
       km: "km",
@@ -943,6 +945,7 @@ const translations: Record<Language, Translations> = {
       toastError: "সব তথ্য সঠিকভাবে পূরণ করুন",
       toastSuccess: "জ্বালানি এন্ট্রি সংরক্ষিত!",
       electricNote: "ইলেক্ট্রিক গাড়িতে জ্বালানি খরচ লাগে না",
+      pricePerLitre: "প্রতি লিটার দাম",
     },
     common: {
       km: "কি.মি.",
@@ -1305,6 +1308,7 @@ const translations: Record<Language, Translations> = {
       toastError: "सभी फ़ील्ड सही से भरें",
       toastSuccess: "ईंधन एंट्री सहेजी गई!",
       electricNote: "इलेक्ट्रिक वाहनों को ईंधन खर्च की जरूरत नहीं",
+      pricePerLitre: "प्रति लीटर कीमत",
     },
     common: {
       km: "km",

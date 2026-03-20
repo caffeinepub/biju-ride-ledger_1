@@ -604,7 +604,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           className="rounded-2xl p-3 border bg-card"
           style={{ borderColor: "oklch(var(--border))" }}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
             {t.shift.control}
           </p>
 
@@ -1001,7 +1001,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           />
           <div className="relative z-10">
             <p
-              className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+              className="text-xs font-bold uppercase tracking-widest mb-1"
               style={{ color: "oklch(0.82 0.08 264)" }}
             >
               {t.home.netProfit}
@@ -1046,7 +1046,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           }}
         >
           <p
-            className="text-[11px] font-semibold uppercase tracking-widest mb-3"
+            className="text-xs font-bold uppercase tracking-widest mb-3"
             style={{ color: isDark ? "#F1F5F9" : "oklch(0.42 0.15 264)" }}
           >
             {t.shift.profitAnalyzer}
@@ -1128,12 +1128,12 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
             <div className="flex items-center gap-1.5 mb-1">
               <Star
                 size={12}
-                style={{ color: "oklch(0.46 0.22 255)" }}
+                style={{ color: "oklch(0.42 0.22 255)" }}
                 fill="oklch(0.46 0.22 255)"
               />
               <p
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "oklch(0.46 0.22 255)" }}
+                style={{ color: "oklch(0.42 0.22 255)" }}
               >
                 {t.shift.bestArea}
               </p>
@@ -1162,7 +1162,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           className="rounded-2xl p-4 border bg-card"
           style={{ borderColor: "oklch(var(--border))" }}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
             {t.shift.thisWeek}
           </p>
           <div className="grid grid-cols-4 gap-2 text-center">
@@ -1172,7 +1172,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.46 0.22 255)" }}
+                style={{ color: "oklch(0.42 0.22 255)" }}
               >
                 {weeklyData.rides}
               </p>
@@ -1225,7 +1225,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
           }}
         >
           <p
-            className="text-[11px] font-semibold uppercase tracking-widest mb-2"
+            className="text-xs font-bold uppercase tracking-widest mb-2"
             style={{ color: isDark ? "#F1F5F9" : "oklch(0.45 0.20 145)" }}
           >
             {t.shift.allTimeTotals}
@@ -1237,7 +1237,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.46 0.22 255)" }}
+                style={{ color: "oklch(0.42 0.22 255)" }}
               >
                 {allTimeRides}
               </p>
@@ -1270,7 +1270,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
               </p>
               <p
                 className="text-sm font-bold"
-                style={{ color: "oklch(0.46 0.22 255)" }}
+                style={{ color: "oklch(0.42 0.22 255)" }}
               >
                 {allTimeDist.toFixed(0)}km
               </p>

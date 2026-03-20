@@ -349,7 +349,7 @@ export default function HistoryPage({
                           if (startKm && endKm && !isActive) {
                             return (
                               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                                ✅ Shift KM: {startKm} → {endKm}
+                                ✅ {t.shift.shiftKm}: {startKm} → {endKm}
                               </span>
                             );
                           }

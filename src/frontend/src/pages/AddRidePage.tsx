@@ -477,7 +477,10 @@ export default function AddRidePage({
           <p className="text-xs text-muted-foreground">{t.addRide.netIncome}</p>
           <p
             className="text-3xl font-bold font-display"
-            style={{ color: "oklch(0.65 0.15 142)" }}
+            style={{
+              color: "oklch(0.45 0.20 142)",
+              filter: "drop-shadow(0 0 8px oklch(0.65 0.18 142 / 0.5))",
+            }}
           >
             {formatAmount(netIncome)}
           </p>

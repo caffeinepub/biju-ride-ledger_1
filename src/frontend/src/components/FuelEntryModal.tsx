@@ -35,9 +35,17 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
   const [date, setDate] = useState(today);
   const [odometerKm, setOdometerKm] = useState("");
   const [litres, setLitres] = useState("");
-  const [cost, setCost] = useState("");
+  const [pricePerLitre, setPricePerLitre] = useState(
+    String(settings.fuelPricePerLitre || ""),
+  );
 
-  const isElectric = fuelType === "electric" || fuelType === "hybrid";
+  const isElectric = fuelType === "electric";
+  const cost =
+    !isElectric && pricePerLitre && litres
+      ? (Number.parseFloat(pricePerLitre) * Number.parseFloat(litres)).toFixed(
+          2,
+        )
+      : "0";
 
   const handleSave = () => {
     const odo = Number.parseFloat(odometerKm);
@@ -54,14 +62,12 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
       }
       addFuelEntry({ date, odometerKm: odo, litres: lit, cost: cst });
     } else {
-      // Electric: no fuel cost, use 0 for litres and cost
       addFuelEntry({ date, odometerKm: odo, litres: 0, cost: 0 });
     }
     toast.success(t.fuel.toastSuccess);
     setDate(today);
     setOdometerKm("");
     setLitres("");
-    setCost("");
     setFuelType("petrol");
     onClose();
   };
@@ -76,29 +82,49 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
           <DialogTitle className="font-display">{t.fuel.title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Fuel Type Selector */}
-          <div>
-            <Label>{t.fuel.type}</Label>
-            <Select
-              value={fuelType}
-              onValueChange={(v) => setFuelType(v as FuelType)}
-            >
-              <SelectTrigger
-                data-ocid="fuel.type.select"
-                className="mt-1 h-11 rounded-xl"
+          {/* ─── Unified Fuel Section (Type + Price grouped) ─── */}
+          <div className="bg-muted/30 rounded-xl p-3 space-y-3 border border-border">
+            {/* Row 1: Fuel Type */}
+            <div>
+              <Label className="text-xs font-semibold">{t.fuel.type}</Label>
+              <Select
+                value={fuelType}
+                onValueChange={(v) => setFuelType(v as FuelType)}
               >
-                <SelectValue placeholder={t.fuel.selectType} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="petrol">{t.fuel.petrol}</SelectItem>
-                <SelectItem value="diesel">{t.fuel.diesel}</SelectItem>
-                <SelectItem value="cng">{t.fuel.cng}</SelectItem>
-                <SelectItem value="electric">{t.fuel.electric}</SelectItem>
-                <SelectItem value="hybrid">
-                  {t.fuel.hybrid || "Hybrid"}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  data-ocid="fuel.type.select"
+                  className="mt-1 h-11 rounded-xl"
+                >
+                  <SelectValue placeholder={t.fuel.selectType} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="petrol">{t.fuel.petrol}</SelectItem>
+                  <SelectItem value="diesel">{t.fuel.diesel}</SelectItem>
+                  <SelectItem value="cng">{t.fuel.cng}</SelectItem>
+                  <SelectItem value="electric">{t.fuel.electric}</SelectItem>
+                  <SelectItem value="hybrid">
+                    {t.fuel.hybrid || "Hybrid"}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 2: Price per Litre — hidden for Electric */}
+            {!isElectric && (
+              <div>
+                <Label className="text-xs font-semibold">
+                  {t.fuel.pricePerLitre || "Price per Litre"}
+                </Label>
+                <Input
+                  data-ocid="fuel.price.input"
+                  type="number"
+                  placeholder="e.g. 105"
+                  value={pricePerLitre}
+                  onChange={(e) => setPricePerLitre(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+            )}
           </div>
 
           {/* Electric notice */}
@@ -136,31 +162,23 @@ export default function FuelEntryModal({ open, onClose }: FuelEntryModalProps) {
             />
           </div>
 
-          {/* Litres + Cost — hidden for Electric */}
+          {/* Litres — hidden for Electric */}
           {!isElectric && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>{t.fuel.litres}</Label>
-                <Input
-                  data-ocid="fuel.litres.input"
-                  type="number"
-                  placeholder="e.g. 3.5"
-                  value={litres}
-                  onChange={(e) => setLitres(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>{t.fuel.cost}</Label>
-                <Input
-                  data-ocid="fuel.cost.input"
-                  type="number"
-                  placeholder="e.g. 368"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label>{t.fuel.litres}</Label>
+              <Input
+                data-ocid="fuel.litres.input"
+                type="number"
+                placeholder="e.g. 3.5"
+                value={litres}
+                onChange={(e) => setLitres(e.target.value)}
+                className="mt-1"
+              />
+              {litres && pricePerLitre && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t.fuel.cost}: ₹{cost}
+                </p>
+              )}
             </div>
           )}
 

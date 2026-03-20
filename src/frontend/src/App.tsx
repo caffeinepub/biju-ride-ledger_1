@@ -50,6 +50,9 @@ function AppInner() {
     return (localStorage.getItem("biju_theme") as "light" | "dark") || "light";
   });
 
+  // Navigation history stack for proper back button behavior
+  const navHistoryRef = useRef<TabName[]>([]);
+
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,28 +70,34 @@ function AppInner() {
         history.pushState({ biju: true }, "", window.location.href);
         return;
       }
-      const currentIndex = TAB_ORDER.indexOf(activeTab);
-      if (currentIndex <= 0) {
-        // On dashboard — show exit confirm
-        setShowExitConfirm(true);
-        history.pushState({ biju: true }, "", window.location.href);
-      } else {
-        // Navigate to previous tab
-        const prevTab = TAB_ORDER[currentIndex - 1];
+      // Pop from our navigation history stack
+      const stack = navHistoryRef.current;
+      if (stack.length > 0) {
+        const prevTab = stack[stack.length - 1];
+        navHistoryRef.current = stack.slice(0, -1);
         setActiveTab(prevTab);
         localStorage.setItem("biju_last_tab", prevTab);
+        history.pushState({ biju: true }, "", window.location.href);
+      } else {
+        // Stack is empty — we're at the root, show exit confirm
+        setShowExitConfirm(true);
         history.pushState({ biju: true }, "", window.location.href);
       }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [activeTab, showDriverProfile]);
+  }, [showDriverProfile]);
 
-  const goToTab = useCallback((tab: TabName) => {
-    setActiveTab(tab);
-    localStorage.setItem("biju_last_tab", tab);
-  }, []);
+  const goToTab = useCallback(
+    (tab: TabName) => {
+      // Push current tab onto history stack before switching
+      navHistoryRef.current = [...navHistoryRef.current, activeTab];
+      setActiveTab(tab);
+      localStorage.setItem("biju_last_tab", tab);
+    },
+    [activeTab],
+  );
 
   const handleSplashComplete = () => {
     sessionStorage.setItem("splashShownAt", String(Date.now()));
@@ -132,6 +141,22 @@ function AppInner() {
     onSwipeRight: handleSwipeRight,
     elementRef: contentRef,
   });
+
+  const handleExitApp = () => {
+    setShowExitConfirm(false);
+    // Try window.close() first — works in PWA standalone mode
+    window.close();
+    // If still open after 300ms, navigate history back as far as possible
+    setTimeout(() => {
+      try {
+        window.history.go(-window.history.length);
+      } catch (_) {}
+      // Final fallback
+      setTimeout(() => {
+        window.location.href = "about:blank";
+      }, 300);
+    }, 300);
+  };
 
   if (showSplash) {
     return <SplashScreen onComplete={handleSplashComplete} />;
@@ -222,17 +247,7 @@ function AppInner() {
                 type="button"
                 data-ocid="exit.confirm_button"
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold"
-                onClick={() => {
-                  setShowExitConfirm(false);
-                  // Try window.close() first (works in PWA standalone mode)
-                  // If that fails (browser tab), go back as far as possible
-                  try {
-                    window.close();
-                  } catch (_) {}
-                  setTimeout(() => {
-                    window.history.go(-window.history.length);
-                  }, 100);
-                }}
+                onClick={handleExitApp}
               >
                 Exit
               </button>
