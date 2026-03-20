@@ -28,6 +28,15 @@ function shouldShowSplash(): boolean {
   return elapsed > 30000;
 }
 
+// Push a state so there is always at least one entry in browser history
+function pushAppState(tab?: string) {
+  window.history.pushState(
+    { app: true, tab: tab ?? "home" },
+    "",
+    window.location.href,
+  );
+}
+
 function AppInner() {
   const [showSplash, setShowSplash] = useState(shouldShowSplash);
   const [activeTab, setActiveTab] = useState<TabName>(() => {
@@ -50,9 +59,12 @@ function AppInner() {
     return (localStorage.getItem("biju_theme") as "light" | "dark") || "light";
   });
 
+  // Internal navigation stack — source of truth, never depends on browser
   const navStackRef = useRef<TabName[]>([]);
+  // Refs so popstate handler always reads current values with no stale closure
   const activeTabRef = useRef<TabName>(activeTab);
   const showDriverProfileRef = useRef<boolean>(false);
+  const showExitConfirmRef = useRef<boolean>(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,17 +72,32 @@ function AppInner() {
   }, [showDriverProfile]);
 
   useEffect(() => {
+    showExitConfirmRef.current = showExitConfirm;
+  }, [showExitConfirm]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle("dark", appTheme === "dark");
     localStorage.setItem("biju_theme", appTheme);
   }, [appTheme]);
 
+  // Low-level navigate — updates state + ref + localStorage + browser history
   const navigateTo = useCallback((tab: TabName) => {
     activeTabRef.current = tab;
     setActiveTab(tab);
     localStorage.setItem("biju_last_tab", tab);
+    // Push a browser history entry so every tab switch is trackable
+    pushAppState(tab);
   }, []);
 
+  // handleBack — fully internal, never relies on browser state
   const handleBack = useCallback(() => {
+    // If exit confirm is showing, dismiss it first
+    if (showExitConfirmRef.current) {
+      setShowExitConfirm(false);
+      return;
+    }
+
+    // If driver profile overlay is open, close it
     if (showDriverProfileRef.current) {
       setShowDriverProfile(false);
       return;
@@ -80,11 +107,12 @@ function AppInner() {
       const stack = navStackRef.current;
       const prevTab = stack[stack.length - 1];
       navStackRef.current = stack.slice(0, -1);
+      // navigateTo pushes a new browser state — that's fine, we want the stack full
       navigateTo(prevTab);
       return;
     }
 
-    // Stack empty
+    // Stack empty — only show exit on Dashboard, otherwise go home
     if (activeTabRef.current === "home") {
       setShowExitConfirm(true);
     } else {
@@ -92,15 +120,22 @@ function AppInner() {
     }
   }, [navigateTo]);
 
+  // Keep a stable ref so the once-registered popstate can always call latest handleBack
   const handleBackRef = useRef(handleBack);
   handleBackRef.current = handleBack;
 
-  // Minimal popstate listener — registered once, delegates to handleBackRef
+  // Register popstate ONCE on mount.
+  // Strategy: always push a fresh state after every popstate so the browser
+  // history stack never empties — Chrome can never navigate away on its own.
   useEffect(() => {
-    history.pushState({ biju: true }, "", window.location.href);
+    // Seed two entries so there is always a buffer even after one pop
+    pushAppState("home");
+    pushAppState("home");
 
     const onPopState = () => {
-      history.pushState({ biju: true }, "", window.location.href);
+      // Immediately push state back — replenish the buffer before anything else
+      pushAppState(activeTabRef.current);
+      // Now let our internal logic decide what to show
       handleBackRef.current();
     };
 
@@ -108,6 +143,7 @@ function AppInner() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // Navigate to a new tab, pushing current onto the internal stack
   const goToTab = useCallback(
     (tab: TabName) => {
       navStackRef.current = [...navStackRef.current, activeTabRef.current];
@@ -160,14 +196,13 @@ function AppInner() {
 
   const handleExitApp = () => {
     setShowExitConfirm(false);
+    // Best-effort PWA close
     window.close();
     setTimeout(() => {
       try {
-        window.history.go(-window.history.length);
-      } catch (_) {}
-      setTimeout(() => {
+        // Fallback: navigate to blank
         window.location.href = "about:blank";
-      }, 300);
+      } catch (_) {}
     }, 300);
   };
 
