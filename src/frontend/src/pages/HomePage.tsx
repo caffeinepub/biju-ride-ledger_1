@@ -502,7 +502,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
     transition: { duration: 0.38, delay, ease: "easeOut" as const },
   });
 
-  const periodLabel = `Today — ${formatISTDate(today)}`;
+  const periodLabel = `${t.reports.today} — ${formatISTDate(today)}`;
 
   return (
     <div className="flex flex-col min-h-screen pb-20">
@@ -638,7 +638,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 color: "oklch(0.40 0.02 264)",
               }}
             >
-              🛌 OFF DAY
+              {`🛌 ${t.shift.offDay}`}
             </div>
           )}
           {isPersonalRun && (
@@ -649,7 +649,7 @@ export default function HomePage({ onAvatarClick }: HomePageProps) {
                 color: "oklch(0.38 0.18 264)",
               }}
             >
-              🚗 PERSONAL RUN — {isPersonalRun.km} km
+              {`🚗 ${t.shift.personalRun} — ${isPersonalRun.km} km`}
             </div>
           )}
 

@@ -50,53 +50,80 @@ function AppInner() {
     return (localStorage.getItem("biju_theme") as "light" | "dark") || "light";
   });
 
-  // Navigation history stack for proper back button behavior
-  const navHistoryRef = useRef<TabName[]>([]);
+  // Navigation history stack — persists across renders via ref
+  const navStackRef = useRef<TabName[]>([]);
+
+  // Refs that mirror state so the popstate handler (registered once) can
+  // always read the latest values without stale closures.
+  const activeTabRef = useRef<TabName>(activeTab);
+  const showDriverProfileRef = useRef<boolean>(false);
 
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Keep mirrors in sync
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    showDriverProfileRef.current = showDriverProfile;
+  }, [showDriverProfile]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", appTheme === "dark");
     localStorage.setItem("biju_theme", appTheme);
   }, [appTheme]);
 
-  // Push initial state so we can catch popstate
+  // Register the popstate handler EXACTLY ONCE (empty dep array).
+  // All mutable values are read through refs so no stale closures.
   useEffect(() => {
+    // Push a sentinel so the very first back press triggers popstate.
     history.pushState({ biju: true }, "", window.location.href);
 
     const handlePopState = () => {
-      if (showDriverProfile) {
+      // Immediately push another sentinel so subsequent back presses
+      // keep firing popstate instead of navigating the real browser history.
+      history.pushState({ biju: true }, "", window.location.href);
+
+      // If the driver profile overlay is open, close it first.
+      if (showDriverProfileRef.current) {
         setShowDriverProfile(false);
-        history.pushState({ biju: true }, "", window.location.href);
         return;
       }
-      // Pop from our navigation history stack
-      const stack = navHistoryRef.current;
+
+      // Read the current stack directly from the ref (never stale).
+      const stack = navStackRef.current;
+
       if (stack.length > 0) {
+        // Pop the top entry and navigate back.
         const prevTab = stack[stack.length - 1];
-        navHistoryRef.current = stack.slice(0, -1);
+        navStackRef.current = stack.slice(0, -1);
         setActiveTab(prevTab);
         localStorage.setItem("biju_last_tab", prevTab);
-        history.pushState({ biju: true }, "", window.location.href);
       } else {
-        // Stack is empty — we're at the root, show exit confirm
-        setShowExitConfirm(true);
-        history.pushState({ biju: true }, "", window.location.href);
+        // Stack is empty — either show exit prompt (on home) or go home.
+        if (activeTabRef.current === "home") {
+          setShowExitConfirm(true);
+        } else {
+          setActiveTab("home");
+          localStorage.setItem("biju_last_tab", "home");
+        }
       }
     };
 
     window.addEventListener("popstate", handlePopState);
+    // Cleanup only on unmount (not on every render).
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [showDriverProfile]);
+  }, []); // <-- empty array: register once, never re-register
 
   const goToTab = useCallback(
     (tab: TabName) => {
-      // Push current tab onto history stack before switching
-      navHistoryRef.current = [...navHistoryRef.current, activeTab];
+      // Push the current tab onto the stack before switching.
+      navStackRef.current = [...navStackRef.current, activeTabRef.current];
       setActiveTab(tab);
       localStorage.setItem("biju_last_tab", tab);
     },
-    [activeTab],
+    [], // no deps — reads activeTab through the ref, always up-to-date
   );
 
   const handleSplashComplete = () => {
@@ -121,20 +148,20 @@ function AppInner() {
 
   const goToDriverProfile = () => setShowDriverProfile(true);
 
-  // Swipe navigation
+  // Swipe navigation between main tabs
   const handleSwipeLeft = useCallback(() => {
-    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    const currentIndex = TAB_ORDER.indexOf(activeTabRef.current);
     if (currentIndex < TAB_ORDER.length - 1) {
       goToTab(TAB_ORDER[currentIndex + 1]);
     }
-  }, [activeTab, goToTab]);
+  }, [goToTab]);
 
   const handleSwipeRight = useCallback(() => {
-    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    const currentIndex = TAB_ORDER.indexOf(activeTabRef.current);
     if (currentIndex > 0) {
       goToTab(TAB_ORDER[currentIndex - 1]);
     }
-  }, [activeTab, goToTab]);
+  }, [goToTab]);
 
   useSwipeNavigation({
     onSwipeLeft: handleSwipeLeft,
@@ -144,14 +171,13 @@ function AppInner() {
 
   const handleExitApp = () => {
     setShowExitConfirm(false);
-    // Try window.close() first — works in PWA standalone mode
+    // Try window.close() — works in PWA standalone / some browsers
     window.close();
-    // If still open after 300ms, navigate history back as far as possible
+    // Fallback: navigate history all the way back
     setTimeout(() => {
       try {
         window.history.go(-window.history.length);
       } catch (_) {}
-      // Final fallback
       setTimeout(() => {
         window.location.href = "about:blank";
       }, 300);
@@ -162,7 +188,7 @@ function AppInner() {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
-  // Driver profile overlay (appears over everything except splash)
+  // Driver profile overlay
   if (showDriverProfile) {
     return (
       <div className="relative min-h-screen max-w-md mx-auto">
@@ -226,7 +252,6 @@ function AppInner() {
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
-            data-ocid="exit.dialog"
           >
             <h3 className="text-base font-bold text-gray-900 dark:text-white">
               Exit App?
@@ -237,7 +262,6 @@ function AppInner() {
             <div className="flex gap-3">
               <button
                 type="button"
-                data-ocid="exit.cancel_button"
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300"
                 onClick={() => setShowExitConfirm(false)}
               >
@@ -245,7 +269,6 @@ function AppInner() {
               </button>
               <button
                 type="button"
-                data-ocid="exit.confirm_button"
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold"
                 onClick={handleExitApp}
               >
