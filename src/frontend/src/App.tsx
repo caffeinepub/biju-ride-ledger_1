@@ -50,20 +50,10 @@ function AppInner() {
     return (localStorage.getItem("biju_theme") as "light" | "dark") || "light";
   });
 
-  // Navigation history stack — persists across renders via ref
   const navStackRef = useRef<TabName[]>([]);
-
-  // Refs that mirror state so the popstate handler (registered once) can
-  // always read the latest values without stale closures.
   const activeTabRef = useRef<TabName>(activeTab);
   const showDriverProfileRef = useRef<boolean>(false);
-
   const contentRef = useRef<HTMLDivElement>(null);
-
-  // Keep mirrors in sync
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
 
   useEffect(() => {
     showDriverProfileRef.current = showDriverProfile;
@@ -74,56 +64,56 @@ function AppInner() {
     localStorage.setItem("biju_theme", appTheme);
   }, [appTheme]);
 
-  // Register the popstate handler EXACTLY ONCE (empty dep array).
-  // All mutable values are read through refs so no stale closures.
+  const navigateTo = useCallback((tab: TabName) => {
+    activeTabRef.current = tab;
+    setActiveTab(tab);
+    localStorage.setItem("biju_last_tab", tab);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (showDriverProfileRef.current) {
+      setShowDriverProfile(false);
+      return;
+    }
+
+    if (navStackRef.current.length > 0) {
+      const stack = navStackRef.current;
+      const prevTab = stack[stack.length - 1];
+      navStackRef.current = stack.slice(0, -1);
+      navigateTo(prevTab);
+      return;
+    }
+
+    // Stack empty
+    if (activeTabRef.current === "home") {
+      setShowExitConfirm(true);
+    } else {
+      navigateTo("home");
+    }
+  }, [navigateTo]);
+
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+
+  // Minimal popstate listener — registered once, delegates to handleBackRef
   useEffect(() => {
-    // Push a sentinel so the very first back press triggers popstate.
     history.pushState({ biju: true }, "", window.location.href);
 
-    const handlePopState = () => {
-      // Immediately push another sentinel so subsequent back presses
-      // keep firing popstate instead of navigating the real browser history.
+    const onPopState = () => {
       history.pushState({ biju: true }, "", window.location.href);
-
-      // If the driver profile overlay is open, close it first.
-      if (showDriverProfileRef.current) {
-        setShowDriverProfile(false);
-        return;
-      }
-
-      // Read the current stack directly from the ref (never stale).
-      const stack = navStackRef.current;
-
-      if (stack.length > 0) {
-        // Pop the top entry and navigate back.
-        const prevTab = stack[stack.length - 1];
-        navStackRef.current = stack.slice(0, -1);
-        setActiveTab(prevTab);
-        localStorage.setItem("biju_last_tab", prevTab);
-      } else {
-        // Stack is empty — either show exit prompt (on home) or go home.
-        if (activeTabRef.current === "home") {
-          setShowExitConfirm(true);
-        } else {
-          setActiveTab("home");
-          localStorage.setItem("biju_last_tab", "home");
-        }
-      }
+      handleBackRef.current();
     };
 
-    window.addEventListener("popstate", handlePopState);
-    // Cleanup only on unmount (not on every render).
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []); // <-- empty array: register once, never re-register
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const goToTab = useCallback(
     (tab: TabName) => {
-      // Push the current tab onto the stack before switching.
       navStackRef.current = [...navStackRef.current, activeTabRef.current];
-      setActiveTab(tab);
-      localStorage.setItem("biju_last_tab", tab);
+      navigateTo(tab);
     },
-    [], // no deps — reads activeTab through the ref, always up-to-date
+    [navigateTo],
   );
 
   const handleSplashComplete = () => {
@@ -148,7 +138,6 @@ function AppInner() {
 
   const goToDriverProfile = () => setShowDriverProfile(true);
 
-  // Swipe navigation between main tabs
   const handleSwipeLeft = useCallback(() => {
     const currentIndex = TAB_ORDER.indexOf(activeTabRef.current);
     if (currentIndex < TAB_ORDER.length - 1) {
@@ -171,9 +160,7 @@ function AppInner() {
 
   const handleExitApp = () => {
     setShowExitConfirm(false);
-    // Try window.close() — works in PWA standalone / some browsers
     window.close();
-    // Fallback: navigate history all the way back
     setTimeout(() => {
       try {
         window.history.go(-window.history.length);
@@ -188,7 +175,6 @@ function AppInner() {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
-  // Driver profile overlay
   if (showDriverProfile) {
     return (
       <div className="relative min-h-screen max-w-md mx-auto">
@@ -240,7 +226,6 @@ function AppInner() {
         <TargetCelebration onClose={() => setShowCelebration(false)} />
       )}
 
-      {/* Exit App Confirmation Dialog */}
       {showExitConfirm && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
